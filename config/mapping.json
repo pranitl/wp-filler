@@ -155,10 +155,43 @@
     },
     {
       "payloadKey": "below_headline",
+      "type": "text",
+      "selector": "#acf-field_091kfmjg85g1g",
+      "panel": "panel_below_form",
+      "description": "Below Form headline field"
+    },
+    {
+      "payloadKey": "below_tinymce_init",
+      "type": "button",
+      "selector": ".acf-editor-toolbar",
+      "alternativeSelectors": [
+        "div:has-text('Click to initialize TinyMCE')",
+        ".acf-editor-wrap",
+        "[data-toolbar='full']"
+      ],
+      "action": "click",
+      "panel": "panel_below_form",
+      "description": "Click to initialize TinyMCE editor for Below Form"
+    },
+    {
+      "payloadKey": "below_text_html_button",
+      "type": "button",
+      "selector": "#acf-editor-198-html",
+      "action": "click",
+      "panel": "panel_below_form",
+      "description": "Switch to Text mode for Below Form editor"
+    },
+    {
+      "payloadKey": "below_content",
       "type": "tinymce",
-      "selector": "#tinymce",
+      "selector": "#acf-editor-198",
+      "alternativeSelectors": [
+        "#acf-editor-198_ifr",
+        "#tinymce"
+      ],
       "editorId": "acf-editor-198",
-      "panel": "panel_below_form"
+      "panel": "panel_below_form",
+      "description": "Below Form content editor"
     },
     {
       "payloadKey": "svc1_name",

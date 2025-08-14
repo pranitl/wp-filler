@@ -1083,12 +1083,94 @@ async function testBelowForm() {
       await page.click(belowPanel.selector).catch(() => page.click('text="Below Form"'));
       await page.waitForTimeout(1500);
       
-      // Handle TinyMCE editor
-      await page.evaluate(() => {
-        if (typeof tinymce !== 'undefined' && tinymce.get('acf-editor-198')) {
-          tinymce.get('acf-editor-198').setContent('<p>Trusted by families across the region for over 20 years.</p>');
+      // Fill the headline field first
+      console.log('  📝 Filling Below Form headline...');
+      const belowHeadlineField = mapping.fields.find(f => f.payloadKey === 'below_headline');
+      if (belowHeadlineField) {
+        await page.fill(belowHeadlineField.selector, 'Our Trusted Services').catch((e) => {
+          console.log(`  ⚠️ Could not fill headline: ${e.message}`);
+        });
+      }
+      
+      // Now handle the TinyMCE content editor
+      console.log('  📝 Initializing and filling content editor...');
+      
+      // Check if TinyMCE needs initialization
+      const needsInit = await page.isVisible('text="Click to initialize TinyMCE"').catch(() => false);
+      
+      if (needsInit) {
+        console.log('  🖱️ TinyMCE needs initialization, clicking...');
+        
+        // Try to click the initialization area
+        const initClicked = await page.click('text="Click to initialize TinyMCE"').then(() => true).catch(() => false) ||
+                           await page.click('.acf-editor-toolbar').then(() => true).catch(() => false) ||
+                           await page.click('.acf-editor-wrap').then(() => true).catch(() => false);
+        
+        if (initClicked) {
+          console.log('  ✅ Clicked to initialize TinyMCE');
+          await page.waitForTimeout(1500); // Wait for init
         }
+      }
+      
+      // Fill content - OPTIMIZED
+      console.log('  🔄 Filling content...');
+      
+      // Short wait after initialization
+      await page.waitForTimeout(500);
+      
+      // Since we know it's editor-198, go straight to TinyMCE manipulation
+      const filled = await page.evaluate(() => {
+        const content = '<p>Trusted by families across the region for over 20 years.</p>';
+        
+        // Direct TinyMCE API - we know it's acf-editor-198
+        if (typeof tinymce !== 'undefined') {
+          const editor = tinymce.get('acf-editor-198');
+          if (editor && editor.initialized) {
+            editor.setContent(content);
+            editor.save(); // Save to underlying textarea
+            return 'tinymce-api';
+          }
+        }
+        
+        // Fallback: Try iframe method if TinyMCE API fails
+        const iframe = document.querySelector('#acf-editor-198_ifr');
+        if (iframe && iframe.contentDocument) {
+          const body = iframe.contentDocument.querySelector('#tinymce');
+          if (body) {
+            body.innerHTML = content;
+            // Fire events to ensure WordPress registers the change
+            body.dispatchEvent(new Event('input', { bubbles: true }));
+            body.dispatchEvent(new Event('change', { bubbles: true }));
+            return 'iframe-direct';
+          }
+        }
+        
+        // Last fallback: Text mode
+        const textarea = document.querySelector('#acf-editor-198');
+        if (textarea && textarea.style.display !== 'none') {
+          textarea.value = content;
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          return 'textarea';
+        }
+        
+        return false;
       });
+      
+      if (filled) {
+        console.log(`  ✅ Content filled (method: ${filled})`);
+      } else {
+        // Only try Text mode as last resort
+        console.log('  ⚠️ Direct fill failed, trying Text mode...');
+        const textButton = mapping.fields.find(f => f.payloadKey === 'below_text_html_button');
+        if (textButton) {
+          const clicked = await page.click(textButton.selector).then(() => true).catch(() => false);
+          if (clicked) {
+            await page.waitForTimeout(300);
+            await page.fill('#acf-editor-198', '<p>Trusted by families across the region for over 20 years.</p>').catch(() => {});
+            console.log('  ✅ Content filled via Text mode');
+          }
+        }
+      }
       
       console.log('✅ Below Form filled');
     }
@@ -1329,11 +1411,59 @@ async function fillAllPreviousPhases(page, upToPhase) {
     await page.click(belowPanel.selector).catch(() => page.click('text="Below Form"'));
     await page.waitForTimeout(1500);
     
-    await page.evaluate(() => {
-      if (typeof tinymce !== 'undefined' && tinymce.get('acf-editor-198')) {
-        tinymce.get('acf-editor-198').setContent('<p>Trusted by families across the region.</p>');
+    // Fill headline field
+    const belowHeadlineField = mapping.fields.find(f => f.payloadKey === 'below_headline');
+    if (belowHeadlineField) {
+      await page.fill(belowHeadlineField.selector, 'Our Trusted Services').catch(() => {});
+    }
+    
+    // Check if TinyMCE needs initialization
+    const needsInit = await page.isVisible('text="Click to initialize TinyMCE"').catch(() => false);
+    
+    if (needsInit) {
+      // Click to initialize
+      await page.click('text="Click to initialize TinyMCE"').catch(() => 
+        page.click('.acf-editor-toolbar').catch(() => 
+          page.click('.acf-editor-wrap')));
+      await page.waitForTimeout(1500);
+    }
+    
+    // Fill content - OPTIMIZED (direct TinyMCE)
+    await page.waitForTimeout(500);
+    
+    // Go straight to TinyMCE manipulation
+    const filled = await page.evaluate(() => {
+      const content = '<p>Trusted by families across the region.</p>';
+      
+      // Direct TinyMCE API
+      if (typeof tinymce !== 'undefined') {
+        const editor = tinymce.get('acf-editor-198');
+        if (editor && editor.initialized) {
+          editor.setContent(content);
+          editor.save();
+          return true;
+        }
       }
+      
+      // Fallback to iframe
+      const iframe = document.querySelector('#acf-editor-198_ifr');
+      if (iframe && iframe.contentDocument) {
+        const body = iframe.contentDocument.querySelector('#tinymce');
+        if (body) {
+          body.innerHTML = content;
+          return true;
+        }
+      }
+      
+      return false;
     });
+    
+    if (!filled) {
+      // Only try Text mode as last resort
+      await page.click('#acf-editor-198-html').catch(() => {});
+      await page.waitForTimeout(300);
+      await page.fill('#acf-editor-198', '<p>Trusted by families across the region.</p>').catch(() => {});
+    }
   }
 }
 
