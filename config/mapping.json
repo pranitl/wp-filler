@@ -1,4 +1,22 @@
 {
+  "navigation": {
+    "landing_page_main_sidebar": {
+      "selector": "div.wp-menu-name:has-text('Landing Pages')",
+      "alternativeSelectors": [
+        "//div[contains(@class, 'wp-menu-name') and contains(text(), 'Landing Pages')]",
+        "a[href*='edit.php?post_type=landing'] .wp-menu-name"
+      ],
+      "description": "Landing Pages menu item in WordPress admin sidebar"
+    },
+    "new_landing_page_button": {
+      "selector": "a.page-title-action[href*='post-new.php?post_type=landing']",
+      "alternativeSelectors": [
+        "//a[contains(@class, 'page-title-action') and contains(text(), 'New Landing Page')]",
+        "a:has-text('New Landing Page')"
+      ],
+      "description": "New Landing Page button on the Landing Pages list page"
+    }
+  },
   "panels": [
     {
       "key": "panel_hero_area",

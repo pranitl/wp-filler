@@ -7,6 +7,11 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "node tests/test-automation.js",
+    "test:phases": "node tests/test-phases.js",
+    "test:stealth": "node tests/test-phases-stealth.js",
+    "test:ultra": "node tests/test-ultra-stealth.js",
+    "test:diagnose": "node tests/diagnose-login.js",
+    "test:clear": "node tests/test-phases-stealth.js clear",
     "docker:build": "docker build -t wp-filler .",
     "docker:run": "docker run -p 3000:3000 --env-file .env wp-filler",
     "docker:dev": "docker run -p 3000:3000 --env-file .env -e HEADLESS=false wp-filler"
@@ -22,6 +27,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "playwright": "^1.40.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "dotenv": "^16.3.1",
     "winston": "^3.11.0",
     "joi": "^17.11.0"

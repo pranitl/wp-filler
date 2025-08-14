@@ -72,9 +72,59 @@ async function testLoginAndNavigate() {
     await page.waitForNavigation({ waitUntil: 'networkidle' });
     console.log('✅ Logged in successfully');
     
-    // Navigate to new landing page
-    console.log('\n📍 Navigating to new landing page...');
-    await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
+    // Click Landing Pages in sidebar
+    console.log('\n🖱️ Clicking "Landing Pages" in sidebar...');
+    const landingPagesSelectors = [
+      'text=Landing Pages',
+      'div.wp-menu-name:has-text("Landing Pages")',
+      '//div[contains(@class, "wp-menu-name") and contains(text(), "Landing Pages")]',
+      'a[href*="edit.php?post_type=landing"]'
+    ];
+    
+    let clicked = false;
+    for (const selector of landingPagesSelectors) {
+      try {
+        await page.click(selector);
+        clicked = true;
+        console.log('✅ Clicked Landing Pages menu');
+        break;
+      } catch (e) {
+        // Try next selector
+      }
+    }
+    
+    if (!clicked) {
+      console.log('❌ Could not click Landing Pages menu');
+      throw new Error('Landing Pages menu not found');
+    }
+    
+    await page.waitForLoadState('networkidle');
+    
+    // Click New Landing Page button
+    console.log('🖱️ Clicking "New Landing Page" button...');
+    const newPageSelectors = [
+      'text=New Landing Page',
+      'a.page-title-action:has-text("New Landing Page")',
+      'a[href*="post-new.php?post_type=landing"]'
+    ];
+    
+    clicked = false;
+    for (const selector of newPageSelectors) {
+      try {
+        await page.click(selector);
+        clicked = true;
+        console.log('✅ Clicked New Landing Page button');
+        break;
+      } catch (e) {
+        // Try next selector
+      }
+    }
+    
+    if (!clicked) {
+      console.log('❌ Could not click New Landing Page button');
+      throw new Error('New Landing Page button not found');
+    }
+    
     await page.waitForLoadState('networkidle');
     
     // Check if editor is visible
@@ -117,9 +167,13 @@ async function testFillHeader() {
     await page.click('#wp-submit');
     await page.waitForNavigation({ waitUntil: 'networkidle' });
     
-    // Navigate to new landing page
-    console.log('📍 Going to new landing page...');
-    await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
+    // Navigate through sidebar
+    console.log('📍 Navigating to Landing Pages...');
+    await page.click('text=Landing Pages');
+    await page.waitForLoadState('networkidle');
+    
+    console.log('📍 Clicking New Landing Page...');
+    await page.click('text=New Landing Page');
     await page.waitForLoadState('networkidle');
     
     // Fill the title
@@ -160,7 +214,13 @@ async function testHeroArea() {
     await page.click('#wp-submit');
     await page.waitForNavigation({ waitUntil: 'networkidle' });
     
-    await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
+    // Navigate through sidebar
+    console.log('📍 Navigating to Landing Pages...');
+    await page.click('text=Landing Pages');
+    await page.waitForLoadState('networkidle');
+    
+    console.log('📍 Clicking New Landing Page...');
+    await page.click('text=New Landing Page');
     await page.waitForLoadState('networkidle');
     
     // Fill title

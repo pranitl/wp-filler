@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const winston = require('winston');
 const Joi = require('joi');
+const browserConfig = require('./browser-config');
 require('dotenv').config();
 
 // Configure Winston logger
@@ -108,34 +109,141 @@ async function safeFill(page, selector, value, name) {
 
 // Main automation function
 async function createLandingPage(data) {
-  const browser = await chromium.launch({
-    headless: process.env.HEADLESS === 'true',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  // Use stealth browser configuration
+  const browser = await chromium.launch(browserConfig.getBrowserConfig());
 
-  const context = await browser.newContext({
-    viewport: { width: 1920, height: 1080 }
-  });
+  // Load saved state if exists for session persistence
+  const savedState = await browserConfig.loadState();
+  const contextConfig = browserConfig.getContextConfig();
+  if (savedState) {
+    contextConfig.storageState = savedState;
+    logger.info('Using saved browser session');
+  }
 
+  const context = await browser.newContext(contextConfig);
+  
+  // Apply stealth mode to context before creating page
+  const { addHumanBehavior } = await browserConfig.applyStealthMode(context);
+  
   const page = await context.newPage();
   
   try {
     logger.info('Starting WordPress automation');
-
-    // Step 1: Login to WordPress
-    logger.info('Logging in to WordPress');
-    await page.goto(`${process.env.WP_ADMIN_URL}/wp-login.php`);
-    await safeFill(page, '#user_login', process.env.WP_USERNAME, 'username');
-    await safeFill(page, '#user_pass', process.env.WP_PASSWORD, 'password');
-    await safeClick(page, '#wp-submit', 'login button');
     
-    // Wait for dashboard to load
-    await page.waitForNavigation({ waitUntil: 'networkidle' });
+    // Add human-like behavior
+    await addHumanBehavior(page);
+
+    // Step 1: Check if already logged in
+    await page.goto(process.env.WP_ADMIN_URL, { waitUntil: 'networkidle' });
+    
+    const dashboardVisible = await page.isVisible('#adminmenu').catch(() => false);
+    
+    if (!dashboardVisible) {
+      // Need to login
+      logger.info('Logging in to WordPress');
+      
+      // Check if we're on login page
+      const loginFormVisible = await page.isVisible('#user_login').catch(() => false);
+      if (!loginFormVisible) {
+        await page.goto(`${process.env.WP_ADMIN_URL}/wp-login.php`);
+      }
+      
+      // Add human-like delays
+      await page.waitForTimeout(Math.random() * 1000 + 500);
+      
+      // Type with human-like speed
+      await page.click('#user_login');
+      await page.waitForTimeout(Math.random() * 300 + 200);
+      await page.type('#user_login', process.env.WP_USERNAME, { delay: Math.random() * 50 + 50 });
+      
+      await page.waitForTimeout(Math.random() * 500 + 200);
+      await page.click('#user_pass');
+      await page.waitForTimeout(Math.random() * 300 + 200);
+      await page.type('#user_pass', process.env.WP_PASSWORD, { delay: Math.random() * 50 + 50 });
+      
+      // Check "Remember Me"
+      const rememberMe = await page.$('#rememberme');
+      if (rememberMe) {
+        const isChecked = await rememberMe.isChecked();
+        if (!isChecked) {
+          await rememberMe.click();
+        }
+      }
+      
+      await page.waitForTimeout(Math.random() * 500 + 300);
+      await safeClick(page, '#wp-submit', 'login button');
+      
+      // Wait for dashboard to load
+      await page.waitForNavigation({ waitUntil: 'networkidle' });
+    }
+    
     logger.info('Successfully logged in');
 
-    // Step 2: Navigate to new landing page
-    logger.info('Navigating to new landing page');
-    await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
+    // Step 2: Navigate to new landing page via sidebar
+    logger.info('Navigating to Landing Pages menu');
+    
+    // Load navigation selectors from mapping
+    const navMapping = mapping.navigation || {};
+    
+    // Click Landing Pages in sidebar
+    if (navMapping.landing_page_main_sidebar) {
+      const landingPageSelectors = [
+        navMapping.landing_page_main_sidebar.selector,
+        ...navMapping.landing_page_main_sidebar.alternativeSelectors,
+        'text=Landing Pages'
+      ];
+      
+      let clicked = false;
+      for (const selector of landingPageSelectors) {
+        try {
+          await page.click(selector);
+          clicked = true;
+          logger.info('Clicked Landing Pages menu');
+          break;
+        } catch (e) {
+          // Try next selector
+        }
+      }
+      
+      if (!clicked) {
+        logger.warn('Could not click Landing Pages menu, trying direct navigation');
+        await page.goto(`${process.env.WP_ADMIN_URL}/edit.php?post_type=landing`);
+      }
+    } else {
+      await page.goto(`${process.env.WP_ADMIN_URL}/edit.php?post_type=landing`);
+    }
+    
+    await page.waitForLoadState('networkidle');
+    
+    // Click New Landing Page button
+    logger.info('Clicking New Landing Page button');
+    if (navMapping.new_landing_page_button) {
+      const newPageSelectors = [
+        navMapping.new_landing_page_button.selector,
+        ...navMapping.new_landing_page_button.alternativeSelectors,
+        'text=New Landing Page'
+      ];
+      
+      let clicked = false;
+      for (const selector of newPageSelectors) {
+        try {
+          await page.click(selector);
+          clicked = true;
+          logger.info('Clicked New Landing Page button');
+          break;
+        } catch (e) {
+          // Try next selector
+        }
+      }
+      
+      if (!clicked) {
+        logger.warn('Could not click New Landing Page button, trying direct navigation');
+        await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
+      }
+    } else {
+      await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
+    }
+    
     await page.waitForLoadState('networkidle');
 
     // Step 3: Fill page title
@@ -273,6 +381,14 @@ async function createLandingPage(data) {
     await takeScreenshot(page, 'final-error');
     throw error;
   } finally {
+    // Save browser state for future sessions
+    try {
+      await browserConfig.saveState(context);
+      logger.info('Browser state saved for future sessions');
+    } catch (e) {
+      logger.warn('Could not save browser state:', e.message);
+    }
+    
     await browser.close();
   }
 }
