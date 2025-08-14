@@ -5,6 +5,7 @@ const path = require('path');
 const winston = require('winston');
 const Joi = require('joi');
 const browserConfig = require('./browser-config');
+const WordPressFormFiller = require('./form-filler');
 require('dotenv').config();
 
 // Configure Winston logger
@@ -42,10 +43,14 @@ const payloadSchema = Joi.object({
   cta_headline: Joi.string().allow(''),
   cta_text: Joi.string().allow(''),
   below_headline: Joi.string().allow(''),
+  below_content: Joi.string().allow(''),
   svc1_name: Joi.string().allow(''),
   svc2_name: Joi.string().allow(''),
   svc3_name: Joi.string().allow(''),
-  svc4_name: Joi.string().allow('')
+  svc4_name: Joi.string().allow(''),
+  bottom_cta_headline: Joi.string().allow(''),
+  bottom_cta_url: Joi.string().uri().allow(''),
+  bottom_cta_text: Joi.string().allow('')
 });
 
 const app = express();
@@ -108,7 +113,7 @@ async function safeFill(page, selector, value, name) {
   }
 }
 
-// Main automation function
+// Main automation function - UPDATED to use modular form filler
 async function createLandingPage(data) {
   // Use stealth browser configuration
   const browser = await chromium.launch(browserConfig.getBrowserConfig());
@@ -127,6 +132,9 @@ async function createLandingPage(data) {
   const { addHumanBehavior } = await browserConfig.applyStealthMode(context);
   
   const page = await context.newPage();
+  
+  // Initialize form filler
+  const formFiller = new WordPressFormFiller();
   
   try {
     logger.info('Starting WordPress automation');
@@ -180,231 +188,16 @@ async function createLandingPage(data) {
     
     logger.info('Successfully logged in');
 
-    // Step 2: Navigate to new landing page via sidebar
-    logger.info('Navigating to Landing Pages menu');
+    // Step 2: Use the modular form filler to complete the entire form
+    const result = await formFiller.fillCompleteForm(page, data);
     
-    // Load navigation selectors from mapping
-    const navMapping = mapping.navigation || {};
-    
-    // Click Landing Pages in sidebar
-    if (navMapping.landing_page_main_sidebar) {
-      const landingPageSelectors = [
-        navMapping.landing_page_main_sidebar.selector,
-        ...navMapping.landing_page_main_sidebar.alternativeSelectors,
-        'text=Landing Pages'
-      ];
-      
-      let clicked = false;
-      for (const selector of landingPageSelectors) {
-        try {
-          await page.click(selector);
-          clicked = true;
-          logger.info('Clicked Landing Pages menu');
-          break;
-        } catch (e) {
-          // Try next selector
-        }
-      }
-      
-      if (!clicked) {
-        logger.warn('Could not click Landing Pages menu, trying direct navigation');
-        await page.goto(`${process.env.WP_ADMIN_URL}/edit.php?post_type=landing`);
-      }
-    } else {
-      await page.goto(`${process.env.WP_ADMIN_URL}/edit.php?post_type=landing`);
-    }
-    
-    await page.waitForLoadState('networkidle');
-    
-    // Click New Landing Page button
-    logger.info('Clicking New Landing Page button');
-    if (navMapping.new_landing_page_button) {
-      const newPageSelectors = [
-        navMapping.new_landing_page_button.selector,
-        ...navMapping.new_landing_page_button.alternativeSelectors,
-        'text=New Landing Page'
-      ];
-      
-      let clicked = false;
-      for (const selector of newPageSelectors) {
-        try {
-          await page.click(selector);
-          clicked = true;
-          logger.info('Clicked New Landing Page button');
-          break;
-        } catch (e) {
-          // Try next selector
-        }
-      }
-      
-      if (!clicked) {
-        logger.warn('Could not click New Landing Page button, trying direct navigation');
-        await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
-      }
-    } else {
-      await page.goto(`${process.env.WP_ADMIN_URL}/post-new.php?post_type=landing`);
-    }
-    
-    await page.waitForLoadState('networkidle');
-
-    // Step 3: Fill page title
-    await safeFill(page, '#title', data.header_headline, 'page title');
-
-    // Step 4: Select Page Design option (if provided)
-    if (data.page_design) {
-      logger.info('Selecting Page Design option');
-      await page.evaluate(() => window.scrollBy(0, 500));
-      await page.waitForTimeout(1000);
-      
-      // Find the page_design field in mapping
-      const pageDesignField = fields.find(f => f.payloadKey === 'page_design');
-      if (pageDesignField) {
-        try {
-          await page.waitForSelector(pageDesignField.selector, { timeout: 5000 });
-          await page.$eval(pageDesignField.selector, el => el.scrollIntoViewIfNeeded());
-          await page.waitForTimeout(500);
-          await page.click(pageDesignField.selector);
-          logger.info('Page Design radio button selected');
-        } catch (e) {
-          logger.warn('Could not select Page Design radio button');
-        }
-      }
-    }
-
-    // Step 5: Process each panel
-    const panels = mapping.panels;
-    const fields = mapping.fields;
-
-    // Hero Area Panel
-    logger.info('Filling Hero Area panel');
-    const heroPanel = panels.find(p => p.key === 'panel_hero_area');
-    if (heroPanel) {
-      await safeClick(page, heroPanel.selector, 'Hero Area tab');
-      await page.waitForTimeout(500);
-
-      const heroFields = [
-        'hero_text_left', 'hero_text_right', 'hero_preposition',
-        'hero_territories_csv', 'hero_excerpt', 'hero_btn1_text',
-        'hero_btn1_url', 'hero_btn2_text', 'hero_btn2_url'
-      ];
-
-      for (const fieldKey of heroFields) {
-        const field = fields.find(f => f.payloadKey === fieldKey);
-        if (field && data[fieldKey]) {
-          await safeFill(page, field.selector, data[fieldKey], fieldKey);
-        }
-      }
-    }
-
-    // Intro Content Panel
-    logger.info('Filling Intro Content panel');
-    const introPanel = panels.find(p => p.key === 'panel_intro_content');
-    if (introPanel) {
-      await safeClick(page, introPanel.selector, 'Intro Content tab');
-      await page.waitForTimeout(500);
-
-      // Switch to text mode for HTML editor
-      const textButton = fields.find(f => f.payloadKey === 'intro_text_html_button');
-      if (textButton) {
-        await safeClick(page, textButton.selector, 'Text mode button');
-        await page.waitForTimeout(500);
-      }
-
-      // Fill intro fields
-      const introHeadline = fields.find(f => f.payloadKey === 'intro_headline');
-      if (introHeadline && data.intro_headline) {
-        await safeFill(page, introHeadline.selector, data.intro_headline, 'intro_headline');
-      }
-
-      const introHtml = fields.find(f => f.payloadKey === 'intro_html');
-      if (introHtml && data.intro_html) {
-        await safeFill(page, introHtml.selector, data.intro_html, 'intro_html');
-      }
-    }
-
-    // Call to Action Panel
-    logger.info('Filling Call to Action panel');
-    const ctaPanel = panels.find(p => p.key === 'panel_top_cta');
-    if (ctaPanel) {
-      await safeClick(page, ctaPanel.selector, 'CTA tab');
-      await page.waitForTimeout(500);
-
-      // Get the correct selectors from mapping
-      const ctaHeadlineField = fields.find(f => f.payloadKey === 'cta_headline');
-      const ctaTextField = fields.find(f => f.payloadKey === 'cta_text');
-      
-      // Fill CTA headline
-      if (ctaHeadlineField && data.cta_headline) {
-        logger.debug(`Filling CTA headline with selector: ${ctaHeadlineField.selector}`);
-        await safeFill(page, ctaHeadlineField.selector, data.cta_headline, 'cta_headline');
-      }
-      
-      // Fill CTA text
-      if (ctaTextField && data.cta_text) {
-        logger.debug(`Filling CTA text with selector: ${ctaTextField.selector}`);
-        await safeFill(page, ctaTextField.selector, data.cta_text, 'cta_text');
-      }
-    }
-
-    // Below Form Panel
-    logger.info('Filling Below Form panel');
-    const belowPanel = panels.find(p => p.key === 'panel_below_form');
-    if (belowPanel) {
-      await safeClick(page, belowPanel.selector, 'Below Form tab');
-      await page.waitForTimeout(500);
-
-      const belowField = fields.find(f => f.payloadKey === 'below_headline');
-      if (belowField && data.below_headline) {
-        // Handle TinyMCE editor
-        if (belowField.type === 'tinymce') {
-          await page.evaluate((content, editorId) => {
-            if (typeof tinymce !== 'undefined' && tinymce.get(editorId)) {
-              tinymce.get(editorId).setContent(content);
-            }
-          }, data.below_headline, belowField.editorId);
-          logger.debug('Filled TinyMCE editor for below_headline');
-        } else {
-          await safeFill(page, belowField.selector, data.below_headline, 'below_headline');
-        }
-      }
-    }
-
-    // Services Grid Panel
-    logger.info('Filling Services Grid panel');
-    const servicesPanel = panels.find(p => p.key === 'panel_services_grid');
-    if (servicesPanel) {
-      await safeClick(page, servicesPanel.selector, 'Services Grid tab');
-      await page.waitForTimeout(500);
-
-      const serviceFields = ['svc1_name', 'svc2_name', 'svc3_name', 'svc4_name'];
-      for (const fieldKey of serviceFields) {
-        const field = fields.find(f => f.payloadKey === fieldKey);
-        if (field && data[fieldKey]) {
-          try {
-            await page.selectOption(field.selector, data[fieldKey]);
-            logger.debug(`Selected ${fieldKey}: ${data[fieldKey]}`);
-          } catch (error) {
-            logger.error(`Failed to select ${fieldKey}: ${error.message}`);
-          }
-        }
-      }
-    }
-
-    // Step 5: Publish the page
-    logger.info('Publishing the page');
-    await safeClick(page, '#publish', 'Publish button');
-    
-    // Wait for success message
-    await page.waitForSelector('.notice-success', { timeout: 10000 });
-    logger.info('Page published successfully');
-
-    // Get the published URL
-    const publishedUrl = await page.evaluate(() => {
-      const linkElement = document.querySelector('#sample-permalink a');
-      return linkElement ? linkElement.href : null;
-    });
-
-    return { success: true, url: publishedUrl };
+    logger.info('WordPress automation completed successfully');
+    return { 
+      success: true, 
+      url: result.previewUrl,
+      previewUrl: result.previewUrl,
+      message: result.message
+    };
 
   } catch (error) {
     logger.error('Automation failed:', error);
@@ -458,8 +251,10 @@ app.post('/create-landing', async (req, res) => {
     
     res.status(200).json({
       success: true,
-      message: 'Landing page created successfully',
-      url: result.url
+      message: 'Landing page created and saved as draft successfully',
+      url: result.url,
+      previewUrl: result.previewUrl,
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
@@ -503,19 +298,25 @@ app.post('/test', async (req, res) => {
     intro_html: '<p>We provide exceptional home care services.</p>',
     cta_headline: 'Ready to Get Started?',
     cta_text: 'Contact us today for a free consultation',
-    below_headline: '<p>Trusted by families across the region.</p>',
-    svc1_name: 'Personal Care',
-    svc2_name: 'Home Care',
-    svc3_name: 'Companion Care',
-    svc4_name: 'Dementia Care'
+    below_headline: 'Our Trusted Services',
+    below_content: '<p>Trusted by families across the region for over 20 years.</p>',
+    svc1_name: 'Companion Care',
+    svc2_name: 'Respite Care',
+    svc3_name: 'Dementia Care',
+    svc4_name: 'Elite Care',
+    bottom_cta_headline: 'Start Your Journey Today',
+    bottom_cta_url: 'https://example.com/schedule-consultation',
+    bottom_cta_text: 'Schedule Your Free Consultation'
   };
 
   try {
     const result = await createLandingPage(testData);
     res.status(200).json({
       success: true,
-      message: 'Test page created successfully',
+      message: 'Test page created and saved as draft successfully',
       url: result.url,
+      previewUrl: result.previewUrl,
+      timestamp: new Date().toISOString(),
       testData
     });
   } catch (error) {

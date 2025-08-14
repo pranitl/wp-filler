@@ -1628,7 +1628,8 @@ async function testSaveDraft() {
     await page.click('#save-post');
     console.log('  ✅ Clicked Save Draft button');
     
-    // Wait for save to complete
+    // Wait for save to complete and page to refresh
+    console.log('  ⏳ Waiting for save to complete...');
     await page.waitForTimeout(3000);
     
     // Check for success message
@@ -1636,7 +1637,39 @@ async function testSaveDraft() {
     if (saved) {
       console.log('  ✅ Draft saved successfully!');
     } else {
-      console.log('  ℹ️ Draft save status unknown (no success message)');
+      console.log('  ℹ️ Save completed (checking for preview link)');
+    }
+    
+    // Wait for Preview post link to appear and get the URL
+    console.log('  🔍 Looking for preview URL...');
+    try {
+      // Wait for the Preview post link to appear (up to 10 seconds)
+      await page.waitForSelector('a:has-text("Preview post")', { timeout: 10000 });
+      
+      // Get the preview URL from the href attribute
+      const previewUrl = await page.evaluate(() => {
+        const previewLink = document.querySelector('a[target="_blank"]');
+        if (previewLink && previewLink.textContent.includes('Preview post')) {
+          return previewLink.href;
+        }
+        // Alternative: look for any link with preview=true in the URL
+        const links = document.querySelectorAll('a[href*="preview=true"]');
+        if (links.length > 0) {
+          return links[0].href;
+        }
+        return null;
+      });
+      
+      if (previewUrl) {
+        console.log('  ✅ Preview URL captured!');
+        console.log('\n🔗 PREVIEW URL:');
+        console.log(`  ${previewUrl}`);
+        console.log('\n  You can view the draft landing page at the URL above.');
+      } else {
+        console.log('  ⚠️ Could not capture preview URL');
+      }
+    } catch (error) {
+      console.log('  ⚠️ Preview link not found within timeout');
     }
     
     console.log('\n🎉 COMPLETE FORM SAVED AS DRAFT SUCCESSFULLY!');
