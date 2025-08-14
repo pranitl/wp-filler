@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(gh repo create:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

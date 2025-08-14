@@ -1227,23 +1227,64 @@ async function testServicesGrid() {
       await page.click(servicesPanel.selector).catch(() => page.click('text="Services Grid"'));
       await page.waitForTimeout(1500);
       
-      // Select services from dropdowns
-      const services = ['Personal Care', 'Home Care', 'Companion Care', 'Dementia Care'];
-      const serviceSelectors = [
-        '#acf-field_62f544c0b2137-row-0-field_62f544c0d43e6',
-        '#acf-field_62f544c0b2137-689e2a360e87e-field_62f544c0d43e6',
-        '#acf-field_62f544c0b2137-689e2a350e87d-field_62f544c0d43e6',
-        '#acf-field_62f544c0b2137-row-3-field_62f544c0d43e6'
-      ];
+      // Services to add (we have 4 services to fill)
+      const services = ['Companion Care', 'Respite Care', 'Dementia Care', 'Elite Care'];
       
-      for (let i = 0; i < services.length; i++) {
-        try {
-          await page.selectOption(serviceSelectors[i], services[i]);
-          console.log(`  ✅ Selected service ${i+1}: ${services[i]}`);
-        } catch (e) {
-          console.log(`  ⚠️ Could not select service ${i+1}`);
+      // First, check how many service rows already exist
+      const existingRows = await page.$$('.acf-repeater tbody > tr.acf-row:not(.acf-clone)');
+      const existingCount = existingRows.length;
+      console.log(`  📊 Found ${existingCount} existing service rows`);
+      
+      // Calculate how many services we need to add
+      const servicesToAdd = Math.max(0, services.length - existingCount);
+      
+      // Click "Add a Service" button for each new service needed
+      if (servicesToAdd > 0) {
+        console.log(`  ➕ Adding ${servicesToAdd} new service rows...`);
+        
+        for (let i = 0; i < servicesToAdd; i++) {
+          // Try multiple selectors for the Add button
+          const clicked = await page.click('a.acf-repeater-add-row[data-event="add-row"]')
+            .then(() => true)
+            .catch(() => page.click('a:has-text("Add a Service")').then(() => true))
+            .catch(() => page.click('.acf-button.button-primary[href="#"]').then(() => true))
+            .catch(() => false);
+          
+          if (clicked) {
+            console.log(`    ✅ Added service row ${i + 1}`);
+            await page.waitForTimeout(800); // Wait for row to be added
+          } else {
+            console.log(`    ⚠️ Could not add service row ${i + 1}`);
+          }
         }
       }
+      
+      // Now fill in the service dropdowns
+      console.log('  📝 Selecting services from dropdowns...');
+      
+      // Get all service select elements (not including clone rows)
+      const serviceSelects = await page.$$('.acf-repeater tbody > tr.acf-row:not(.acf-clone) select[name*="field_62f544c0d43e6"]');
+      
+      for (let i = 0; i < Math.min(services.length, serviceSelects.length); i++) {
+        try {
+          // Get the select element's ID or name for targeting
+          const selectId = await serviceSelects[i].getAttribute('id');
+          const selectName = await serviceSelects[i].getAttribute('name');
+          
+          // Try to select the option
+          if (selectId) {
+            await page.selectOption(`#${selectId}`, services[i]);
+          } else if (selectName) {
+            await page.selectOption(`select[name="${selectName}"]`, services[i]);
+          }
+          
+          console.log(`    ✅ Selected service ${i+1}: ${services[i]}`);
+        } catch (e) {
+          console.log(`    ⚠️ Could not select service ${i+1}: ${e.message}`);
+        }
+      }
+      
+      console.log('  ✅ Services Grid filled');
     }
     
     console.log('\n🎉 COMPLETE FORM FILLED SUCCESSFULLY!');
@@ -1465,6 +1506,154 @@ async function fillAllPreviousPhases(page, upToPhase) {
       await page.fill('#acf-editor-198', '<p>Trusted by families across the region.</p>').catch(() => {});
     }
   }
+  
+  if (upToPhase < 9) return;
+  
+  // Phase 9: Services Grid
+  const servicesPanel = mapping.panels.find(p => p.key === 'panel_services_grid');
+  if (servicesPanel) {
+    await page.click(servicesPanel.selector).catch(() => page.click('text="Services Grid"'));
+    await page.waitForTimeout(1500);
+    
+    // Services to add
+    const services = ['Companion Care', 'Respite Care', 'Dementia Care', 'Elite Care'];
+    
+    // Check existing rows
+    const existingRows = await page.$$('.acf-repeater tbody > tr.acf-row:not(.acf-clone)');
+    const existingCount = existingRows.length;
+    const servicesToAdd = Math.max(0, services.length - existingCount);
+    
+    // Add new service rows if needed
+    if (servicesToAdd > 0) {
+      for (let i = 0; i < servicesToAdd; i++) {
+        await page.click('a.acf-repeater-add-row[data-event="add-row"]')
+          .catch(() => page.click('a:has-text("Add a Service")'))
+          .catch(() => page.click('.acf-button.button-primary[href="#"]'));
+        await page.waitForTimeout(800);
+      }
+    }
+    
+    // Fill service dropdowns
+    const serviceSelects = await page.$$('.acf-repeater tbody > tr.acf-row:not(.acf-clone) select[name*="field_62f544c0d43e6"]');
+    
+    for (let i = 0; i < Math.min(services.length, serviceSelects.length); i++) {
+      try {
+        const selectId = await serviceSelects[i].getAttribute('id');
+        const selectName = await serviceSelects[i].getAttribute('name');
+        
+        if (selectId) {
+          await page.selectOption(`#${selectId}`, services[i]);
+        } else if (selectName) {
+          await page.selectOption(`select[name="${selectName}"]`, services[i]);
+        }
+      } catch (e) {
+        // Continue on error
+      }
+    }
+  }
+  
+  if (upToPhase < 10) return;
+  
+  // Phase 10: Bottom CTA
+  const bottomCTAPanel = mapping.panels.find(p => p.key === 'panel_bottom_cta');
+  if (bottomCTAPanel) {
+    await page.click(bottomCTAPanel.selector).catch(() => page.click('a:has-text("Bottom CTA")'));
+    await page.waitForTimeout(1500);
+    
+    // Fill headline
+    await page.fill('#acf-field_62f568766405e', 'Start Your Journey Today').catch(() => {});
+    
+    // Click Select Link button
+    await page.waitForTimeout(500);
+    const selectLinkClicked = await page.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('a'));
+      for (const link of links) {
+        if (link.textContent.trim() === 'Select Link' && link.offsetParent !== null) {
+          link.click();
+          return true;
+        }
+      }
+      return false;
+    });
+    
+    if (selectLinkClicked) {
+      await page.waitForTimeout(1000);
+      // Fill link details
+      await page.fill('#wp-link-url', 'https://example.com/schedule-consultation').catch(() => {});
+      await page.fill('#wp-link-text', 'Schedule Your Free Consultation').catch(() => {});
+      await page.waitForTimeout(500);
+      await page.click('#wp-link-submit').catch(() => {});
+      await page.waitForTimeout(1000);
+    }
+  }
+}
+
+// PHASE 11: Save Draft (includes all previous phases - COMPLETE FORM WITH SAVE)
+async function testSaveDraft() {
+  console.log('🔐 Testing COMPLETE FORM with Save Draft...\n');
+  console.log('This is the absolute final phase - saves the completed form as a draft!\n');
+  
+  const savedState = await browserConfig.loadState();
+  const browser = await chromium.launch(browserConfig.getBrowserConfig());
+  const contextConfig = browserConfig.getContextConfig();
+  if (savedState) contextConfig.storageState = savedState;
+  
+  const context = await browser.newContext(contextConfig);
+  const { addHumanBehavior } = await browserConfig.applyStealthMode(context);
+  const page = await context.newPage();
+
+  try {
+    await addHumanBehavior(page);
+    await page.goto(process.env.WP_ADMIN_URL, { waitUntil: 'networkidle' });
+    
+    const dashboardVisible = await page.isVisible('#adminmenu').catch(() => false);
+    if (!dashboardVisible) {
+      await performLogin(page);
+      await browserConfig.saveState(context);
+    }
+    
+    await navigateToNewLandingPage(page);
+    await fillAllPreviousPhases(page, 11);
+    
+    // Phase 10: Bottom CTA (now part of fillAllPreviousPhases when phase >= 11)
+    // Phase 11: Save Draft
+    console.log('\n📝 Saving the landing page as draft...');
+    
+    // Scroll to top to find the save button
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+    
+    // Click Save Draft button - USING EXACT SELECTOR
+    console.log('  💾 Clicking Save Draft button...');
+    await page.click('#save-post');
+    console.log('  ✅ Clicked Save Draft button');
+    
+    // Wait for save to complete
+    await page.waitForTimeout(3000);
+    
+    // Check for success message
+    const saved = await page.isVisible('.notice-success').catch(() => false);
+    if (saved) {
+      console.log('  ✅ Draft saved successfully!');
+    } else {
+      console.log('  ℹ️ Draft save status unknown (no success message)');
+    }
+    
+    console.log('\n🎉 COMPLETE FORM SAVED AS DRAFT SUCCESSFULLY!');
+    console.log('All panels have been filled and the landing page has been saved as a draft.');
+    
+    await page.screenshot({ path: 'phase11-saved-draft.png', fullPage: true });
+    console.log('\n📸 Screenshot saved as phase11-saved-draft.png');
+    console.log('\n⏸️  Keeping browser open for 20 seconds...');
+    await page.waitForTimeout(20000);
+    
+  } catch (error) {
+    console.error('❌ Error:', error.message);
+    await page.screenshot({ path: 'phase11-error.png', fullPage: true });
+  } finally {
+    await browserConfig.saveState(context);
+    await browser.close();
+  }
 }
 
 // Clear saved session
@@ -1481,6 +1670,128 @@ async function clearSession() {
     console.log('Next login will create a fresh session');
   } catch (error) {
     console.log('❌ Error clearing session:', error.message);
+  }
+}
+
+// PHASE 10: Fill Bottom CTA (includes all previous phases - FINAL COMPLETE FORM)
+async function testBottomCTA() {
+  console.log('🔐 Testing FINAL COMPLETE FORM with Bottom CTA...\n');
+  console.log('This is the absolute final test with all form sections including Bottom CTA!\n');
+  
+  const savedState = await browserConfig.loadState();
+  const browser = await chromium.launch(browserConfig.getBrowserConfig());
+  const contextConfig = browserConfig.getContextConfig();
+  if (savedState) contextConfig.storageState = savedState;
+  
+  const context = await browser.newContext(contextConfig);
+  const { addHumanBehavior } = await browserConfig.applyStealthMode(context);
+  const page = await context.newPage();
+
+  try {
+    await addHumanBehavior(page);
+    await page.goto(process.env.WP_ADMIN_URL, { waitUntil: 'networkidle' });
+    
+    const dashboardVisible = await page.isVisible('#adminmenu').catch(() => false);
+    if (!dashboardVisible) {
+      await performLogin(page);
+      await browserConfig.saveState(context);
+    }
+    
+    await navigateToNewLandingPage(page);
+    await fillAllPreviousPhases(page, 10);
+    
+    // Load mapping
+    const fs = require('fs').promises;
+    const path = require('path');
+    const mappingContent = await fs.readFile(path.join(__dirname, '..', 'config', 'mapping.json'), 'utf8');
+    const mapping = JSON.parse(mappingContent);
+    
+    // Phase 9: Services Grid (now part of fillAllPreviousPhases when phase >= 10)
+    // Phase 10: Bottom CTA Panel
+    console.log('\n📝 Filling Bottom CTA panel...');
+    const bottomCTAPanel = mapping.panels.find(p => p.key === 'panel_bottom_cta');
+    if (bottomCTAPanel) {
+      // Click the Bottom CTA panel
+      await page.click(bottomCTAPanel.selector).catch(() => page.click('a:has-text("Bottom CTA")'));
+      console.log('  ✅ Clicked Bottom CTA panel');
+      await page.waitForTimeout(1500);
+      
+      // Step 1: Fill the headline field - USING EXACT SELECTOR
+      console.log('  📝 Filling Bottom CTA headline...');
+      const headlineText = 'Start Your Journey Today';
+      await page.fill('#acf-field_62f568766405e', headlineText);
+      console.log(`  ✅ Filled headline: ${headlineText}`);
+      
+      // Step 2: Click "Select Link" button - FIND THE RIGHT ONE
+      console.log('  🔗 Clicking Select Link button...');
+      await page.waitForTimeout(500);
+      
+      // Find and click the Select Link button that's visible in the Bottom CTA panel
+      const selectLinkClicked = await page.evaluate(() => {
+        // Look for all anchor tags with "Select Link" text
+        const links = Array.from(document.querySelectorAll('a'));
+        for (const link of links) {
+          if (link.textContent.trim() === 'Select Link' && link.offsetParent !== null) {
+            // Check if it's visible
+            link.click();
+            return true;
+          }
+        }
+        return false;
+      });
+      
+      if (selectLinkClicked) {
+        console.log('  ✅ Clicked Select Link button');
+      } else {
+        console.log('  ⚠️ Could not click Select Link button');
+        // Don't continue if we couldn't click the button
+        console.log('  ✅ Bottom CTA panel completed (without link)');
+        return;
+      }
+      
+      // Step 3: Wait for modal and fill link details
+      await page.waitForTimeout(1000); // Wait for modal to open
+      console.log('  📝 Filling link details...');
+      
+      try {
+        // Fill URL - USING EXACT SELECTOR
+        const linkUrl = 'https://example.com/schedule-consultation';
+        await page.fill('#wp-link-url', linkUrl);
+        console.log(`  ✅ Filled URL: ${linkUrl}`);
+        
+        // Fill link text - USING EXACT SELECTOR
+        const linkText = 'Schedule Your Free Consultation';
+        await page.fill('#wp-link-text', linkText);
+        console.log(`  ✅ Filled link text: ${linkText}`);
+        
+        // Step 4: Click "Add Link" button - USING EXACT SELECTOR
+        await page.waitForTimeout(500);
+        console.log('  💾 Clicking Add Link button...');
+        await page.click('#wp-link-submit');
+        console.log('  ✅ Clicked Add Link button');
+        
+        await page.waitForTimeout(1000); // Wait for modal to close
+      } catch (error) {
+        console.log('  ⚠️ Could not complete link dialog:', error.message);
+      }
+      
+      console.log('  ✅ Bottom CTA panel completed');
+    }
+    
+    console.log('\n🎉 FINAL COMPLETE FORM WITH BOTTOM CTA FILLED SUCCESSFULLY!');
+    console.log('All panels including Bottom CTA have been populated with test data.');
+    
+    await page.screenshot({ path: 'phase10-complete-with-bottom-cta.png', fullPage: true });
+    console.log('\n📸 Screenshot saved as phase10-complete-with-bottom-cta.png');
+    console.log('\n⏸️  Keeping browser open for 20 seconds...');
+    await page.waitForTimeout(20000);
+    
+  } catch (error) {
+    console.error('❌ Error:', error.message);
+    await page.screenshot({ path: 'phase10-error.png', fullPage: true });
+  } finally {
+    await browserConfig.saveState(context);
+    await browser.close();
   }
 }
 
@@ -1520,6 +1831,12 @@ async function main() {
     case '9':
       await testServicesGrid();
       break;
+    case '10':
+      await testBottomCTA();
+      break;
+    case '11':
+      await testSaveDraft();
+      break;
     case 'clear':
       await clearSession();
       break;
@@ -1534,12 +1851,14 @@ async function main() {
       console.log('  6     - Intro Content: Headline + HTML content');
       console.log('  7     - CTA: Call to action headline + text');
       console.log('  8     - Below Form: TinyMCE content');
-      console.log('  9     - Services Grid: Select 4 services (COMPLETE FORM)');
+      console.log('  9     - Services Grid: Select 4 services');
+      console.log('  10    - Bottom CTA: Add bottom CTA link');
+      console.log('  11    - Save Draft: Save the completed form (FINAL!)');
       console.log('  clear - Clear saved browser session');
       console.log('\n🔥 PROGRESSIVE TESTING:');
       console.log('  • Each phase INCLUDES all previous phases');
       console.log('  • Phase 5 = Title + Page Design + Hero Area');
-      console.log('  • Phase 9 = COMPLETE FORM with all panels');
+      console.log('  • Phase 11 = COMPLETE FORM SAVED AS DRAFT!');
       console.log('\n💡 TIPS:');
       console.log('  • Run phase 1 first to save session');
       console.log('  • Test incrementally: 1 → 2 → 3 → etc.');

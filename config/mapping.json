@@ -42,6 +42,15 @@
       "key": "panel_services_grid",
       "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(7) > a",
       "name": "Services Grid"
+    },
+    {
+      "key": "panel_bottom_cta",
+      "selector": "a.acf-tab-button[data-key='field_62f544c0b20fg']",
+      "alternativeSelectors": [
+        "a:has-text('Bottom CTA')",
+        "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(8) > a"
+      ],
+      "name": "Bottom CTA"
     }
   ],
   "fields": [
@@ -224,14 +233,78 @@
       "name": "acf[field_62f9dkhrn3e92]",
       "value": "c",
       "description": "Page Design radio button option C"
+    },
+    {
+      "payloadKey": "bottom_cta_headline",
+      "type": "text",
+      "selector": "#acf-field_62f568766405e",
+      "panel": "panel_bottom_cta",
+      "description": "Bottom CTA headline field"
+    },
+    {
+      "payloadKey": "bottom_cta_select_link_button",
+      "type": "button",
+      "selector": "a.button[data-name='add']",
+      "alternativeSelectors": [
+        "a:has-text('Select Link')",
+        "button:has-text('Select Link')"
+      ],
+      "action": "click",
+      "panel": "panel_bottom_cta",
+      "description": "Select Link button for Bottom CTA"
+    },
+    {
+      "payloadKey": "bottom_cta_url",
+      "type": "text",
+      "selector": "#wp-link-url",
+      "panel": "panel_bottom_cta",
+      "description": "Bottom CTA URL input field"
+    },
+    {
+      "payloadKey": "bottom_cta_link_text",
+      "type": "text",
+      "selector": "#wp-link-text",
+      "panel": "panel_bottom_cta",
+      "description": "Bottom CTA link text input field"
+    },
+    {
+      "payloadKey": "bottom_cta_add_link_button",
+      "type": "button",
+      "selector": "#wp-link-submit",
+      "alternativeSelectors": [
+        "input[value='Add Link']",
+        ".button-primary[name='wp-link-submit']"
+      ],
+      "action": "click",
+      "panel": "panel_bottom_cta",
+      "description": "Add Link button to submit Bottom CTA"
     }
   ],
   "serviceOptions": [
     "Personal Care",
-    "Home Care",
     "Companion Care",
-    "Dementia Care",
     "Respite Care",
-    "Specialized Care"
-  ]
+    "Dementia Care",
+    "Disability Care",
+    "Elite Care",
+    "Errand Services",
+    "Family Care",
+    "Hospice Care",
+    "Live-In Care",
+    "Post-Cosmetic Care",
+    "Rehabilitation & Recovery Care",
+    "Skilled Nursing",
+    "Supplemental Staffing Services",
+    "Traumatic Injury Care",
+    "Travel Companion Services",
+    "Veteran Care"
+  ],
+  "serviceGridAddButton": {
+    "selector": "a.acf-repeater-add-row[data-event='add-row']",
+    "alternativeSelectors": [
+      "a:has-text('Add a Service')",
+      ".acf-button.button-primary[href='#']"
+    ],
+    "description": "Add a Service button in Services Grid"
+  }
 }
