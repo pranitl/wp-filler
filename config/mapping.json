@@ -20,7 +20,7 @@
   "panels": [
     {
       "key": "panel_hero_area",
-      "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(1) > a",
+      "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(3) > a",
       "name": "Hero Area"
     },
     {
@@ -91,13 +91,13 @@
     {
       "payloadKey": "hero_btn1_url",
       "type": "text",
-      "selector": "#acf-field_62f5458f5114f",
+      "selector": "#acf-field_62f5457d5114d",
       "panel": "panel_hero_area"
     },
     {
       "payloadKey": "hero_btn2_text",
       "type": "text",
-      "selector": "#acf-field_62f545835114d",
+      "selector": "#acf-field_62f5458f5114f",
       "panel": "panel_hero_area"
     },
     {
@@ -105,6 +105,21 @@
       "type": "text",
       "selector": "#acf-field_62f545895114e",
       "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "intro_tinymce_init",
+      "type": "button",
+      "selector": ".acf-editor-wrap .mce-tinymce",
+      "alternativeSelectors": [
+        ".acf-editor-wrap .wp-editor-area",
+        "#acf-editor-197_ifr",
+        ".acf-editor-wrap iframe",
+        ".mce-content-body",
+        "[data-placeholder='Click to initialize TinyMCE']"
+      ],
+      "action": "click",
+      "panel": "panel_intro_content",
+      "description": "Click to initialize TinyMCE editor"
     },
     {
       "payloadKey": "intro_text_html_button",
@@ -129,13 +144,13 @@
     {
       "payloadKey": "cta_headline",
       "type": "text",
-      "selector": "#acf-field_62f544c0b2226",
+      "selector": "#acf-field_62f544c0b21ea",
       "panel": "panel_top_cta"
     },
     {
       "payloadKey": "cta_text",
       "type": "text",
-      "selector": "#acf-field_62f544c0b2227",
+      "selector": "#acf-field_62f544c0b2226",
       "panel": "panel_top_cta"
     },
     {
@@ -168,6 +183,14 @@
       "type": "select",
       "selector": "#acf-field_62f544c0b2137-row-3-field_62f544c0d43e6",
       "panel": "panel_services_grid"
+    },
+    {
+      "payloadKey": "page_design",
+      "type": "radio",
+      "selector": "#acf-field_62f9dkhrn3e92-c",
+      "name": "acf[field_62f9dkhrn3e92]",
+      "value": "c",
+      "description": "Page Design radio button option C"
     }
   ],
   "serviceOptions": [

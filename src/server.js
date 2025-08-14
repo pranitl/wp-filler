@@ -27,6 +27,7 @@ const logger = winston.createLogger({
 // Validation schema for incoming payload
 const payloadSchema = Joi.object({
   header_headline: Joi.string().required(),
+  page_design: Joi.string().valid('a', 'b', 'c').allow(''),
   hero_text_left: Joi.string().allow(''),
   hero_text_right: Joi.string().allow(''),
   hero_preposition: Joi.string().max(2).allow(''),
@@ -249,7 +250,28 @@ async function createLandingPage(data) {
     // Step 3: Fill page title
     await safeFill(page, '#title', data.header_headline, 'page title');
 
-    // Step 4: Process each panel
+    // Step 4: Select Page Design option (if provided)
+    if (data.page_design) {
+      logger.info('Selecting Page Design option');
+      await page.evaluate(() => window.scrollBy(0, 500));
+      await page.waitForTimeout(1000);
+      
+      // Find the page_design field in mapping
+      const pageDesignField = fields.find(f => f.payloadKey === 'page_design');
+      if (pageDesignField) {
+        try {
+          await page.waitForSelector(pageDesignField.selector, { timeout: 5000 });
+          await page.$eval(pageDesignField.selector, el => el.scrollIntoViewIfNeeded());
+          await page.waitForTimeout(500);
+          await page.click(pageDesignField.selector);
+          logger.info('Page Design radio button selected');
+        } catch (e) {
+          logger.warn('Could not select Page Design radio button');
+        }
+      }
+    }
+
+    // Step 5: Process each panel
     const panels = mapping.panels;
     const fields = mapping.fields;
 
@@ -307,12 +329,20 @@ async function createLandingPage(data) {
       await safeClick(page, ctaPanel.selector, 'CTA tab');
       await page.waitForTimeout(500);
 
-      const ctaFields = ['cta_headline', 'cta_text'];
-      for (const fieldKey of ctaFields) {
-        const field = fields.find(f => f.payloadKey === fieldKey);
-        if (field && data[fieldKey]) {
-          await safeFill(page, field.selector, data[fieldKey], fieldKey);
-        }
+      // Get the correct selectors from mapping
+      const ctaHeadlineField = fields.find(f => f.payloadKey === 'cta_headline');
+      const ctaTextField = fields.find(f => f.payloadKey === 'cta_text');
+      
+      // Fill CTA headline
+      if (ctaHeadlineField && data.cta_headline) {
+        logger.debug(`Filling CTA headline with selector: ${ctaHeadlineField.selector}`);
+        await safeFill(page, ctaHeadlineField.selector, data.cta_headline, 'cta_headline');
+      }
+      
+      // Fill CTA text
+      if (ctaTextField && data.cta_text) {
+        logger.debug(`Filling CTA text with selector: ${ctaTextField.selector}`);
+        await safeFill(page, ctaTextField.selector, data.cta_text, 'cta_text');
       }
     }
 
@@ -459,6 +489,7 @@ app.post('/test', async (req, res) => {
   // Generate test data
   const testData = {
     header_headline: 'Test Landing Page ' + Date.now(),
+    page_design: 'c',  // Select option C for page design
     hero_text_left: 'Professional',
     hero_text_right: 'Home Care Services',
     hero_preposition: 'in',
