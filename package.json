@@ -1,0 +1,35 @@
+{
+  "name": "wp-filler",
+  "version": "1.0.0",
+  "description": "WordPress Landing Page Automation using Playwright",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node tests/test-automation.js",
+    "docker:build": "docker build -t wp-filler .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env wp-filler",
+    "docker:dev": "docker run -p 3000:3000 --env-file .env -e HEADLESS=false wp-filler"
+  },
+  "keywords": [
+    "wordpress",
+    "automation",
+    "playwright",
+    "landing-pages"
+  ],
+  "author": "pranitl",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.40.0",
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0",
+    "joi": "^17.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

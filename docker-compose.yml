@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  wp-filler:
+    build: .
+    container_name: wp-filler
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - HEADLESS=true
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    restart: unless-stopped
+    networks:
+      - wp-filler-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Development configuration
+  wp-filler-dev:
+    build: .
+    container_name: wp-filler-dev
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - HEADLESS=false
+      - DEBUG_MODE=true
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+      - ./src:/app/src:ro
+    restart: unless-stopped
+    networks:
+      - wp-filler-network
+    profiles:
+      - dev
+
+networks:
+  wp-filler-network:
+    driver: bridge

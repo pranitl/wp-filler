@@ -1,0 +1,163 @@
+{
+  "panels": [
+    {
+      "key": "panel_hero_area",
+      "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(1) > a",
+      "name": "Hero Area"
+    },
+    {
+      "key": "panel_intro_content",
+      "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(4) > a",
+      "name": "Intro Content"
+    },
+    {
+      "key": "panel_top_cta",
+      "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(5) > a",
+      "name": "Call to Action"
+    },
+    {
+      "key": "panel_below_form",
+      "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(6) > a",
+      "name": "Below Form"
+    },
+    {
+      "key": "panel_services_grid",
+      "selector": "#acf-group_62f544c0a7ba2 > div.inside.acf-fields.-top.-sidebar > div.acf-tab-wrap.-left > ul > li:nth-child(7) > a",
+      "name": "Services Grid"
+    }
+  ],
+  "fields": [
+    {
+      "payloadKey": "header_headline",
+      "type": "text",
+      "selector": "#title",
+      "description": "Page title"
+    },
+    {
+      "payloadKey": "hero_text_left",
+      "type": "text",
+      "selector": "#acf-field_62f5463fa1cf1",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "hero_text_right",
+      "type": "text",
+      "selector": "#acf-field_62f5464ea1cf2",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "hero_preposition",
+      "type": "text",
+      "selector": "#acf-field_62f5464ea1cf4",
+      "panel": "panel_hero_area",
+      "maxLength": 2
+    },
+    {
+      "payloadKey": "hero_territories_csv",
+      "type": "text",
+      "selector": "#acf-field_66alf5mrd3g5",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "hero_excerpt",
+      "type": "text",
+      "selector": "#acf-field_66alf5mrd3g6",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "hero_btn1_text",
+      "type": "text",
+      "selector": "#acf-field_62f545595114c",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "hero_btn1_url",
+      "type": "text",
+      "selector": "#acf-field_62f5458f5114f",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "hero_btn2_text",
+      "type": "text",
+      "selector": "#acf-field_62f545835114d",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "hero_btn2_url",
+      "type": "text",
+      "selector": "#acf-field_62f545895114e",
+      "panel": "panel_hero_area"
+    },
+    {
+      "payloadKey": "intro_text_html_button",
+      "type": "button",
+      "selector": "#acf-editor-197-html",
+      "action": "click",
+      "panel": "panel_intro_content"
+    },
+    {
+      "payloadKey": "intro_headline",
+      "type": "text",
+      "selector": "#acf-field_62f544c0b2002",
+      "panel": "panel_intro_content"
+    },
+    {
+      "payloadKey": "intro_html",
+      "type": "textarea",
+      "selector": "#acf-editor-197",
+      "panel": "panel_intro_content",
+      "requiresTextMode": true
+    },
+    {
+      "payloadKey": "cta_headline",
+      "type": "text",
+      "selector": "#acf-field_62f544c0b2226",
+      "panel": "panel_top_cta"
+    },
+    {
+      "payloadKey": "cta_text",
+      "type": "text",
+      "selector": "#acf-field_62f544c0b2227",
+      "panel": "panel_top_cta"
+    },
+    {
+      "payloadKey": "below_headline",
+      "type": "tinymce",
+      "selector": "#tinymce",
+      "editorId": "acf-editor-198",
+      "panel": "panel_below_form"
+    },
+    {
+      "payloadKey": "svc1_name",
+      "type": "select",
+      "selector": "#acf-field_62f544c0b2137-row-0-field_62f544c0d43e6",
+      "panel": "panel_services_grid"
+    },
+    {
+      "payloadKey": "svc2_name",
+      "type": "select",
+      "selector": "#acf-field_62f544c0b2137-689e2a360e87e-field_62f544c0d43e6",
+      "panel": "panel_services_grid"
+    },
+    {
+      "payloadKey": "svc3_name",
+      "type": "select",
+      "selector": "#acf-field_62f544c0b2137-689e2a350e87d-field_62f544c0d43e6",
+      "panel": "panel_services_grid"
+    },
+    {
+      "payloadKey": "svc4_name",
+      "type": "select",
+      "selector": "#acf-field_62f544c0b2137-row-3-field_62f544c0d43e6",
+      "panel": "panel_services_grid"
+    }
+  ],
+  "serviceOptions": [
+    "Personal Care",
+    "Home Care",
+    "Companion Care",
+    "Dementia Care",
+    "Respite Care",
+    "Specialized Care"
+  ]
+}
