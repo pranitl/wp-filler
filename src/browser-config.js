@@ -14,7 +14,7 @@ const getBrowserConfig = () => {
     headless: process.env.HEADLESS === 'true',
     
     // Use a persistent browser context to maintain cookies/session
-    channel: 'chrome', // Use actual Chrome instead of Chromium
+    // channel: 'chrome', // Commented out - using Chromium in Docker
     
     args: [
       '--disable-blink-features=AutomationControlled',  // Remove automation flags

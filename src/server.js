@@ -35,9 +35,9 @@ const payloadSchema = Joi.object({
   hero_territories_csv: Joi.string().allow(''),
   hero_excerpt: Joi.string().allow(''),
   hero_btn1_text: Joi.string().allow(''),
-  hero_btn1_url: Joi.string().uri().allow(''),
+  hero_btn1_url: Joi.string().allow(''),
   hero_btn2_text: Joi.string().allow(''),
-  hero_btn2_url: Joi.string().uri().allow(''),
+  hero_btn2_url: Joi.string().allow(''),
   intro_headline: Joi.string().allow(''),
   intro_html: Joi.string().allow(''),
   cta_headline: Joi.string().allow(''),
@@ -49,8 +49,10 @@ const payloadSchema = Joi.object({
   svc3_name: Joi.string().allow(''),
   svc4_name: Joi.string().allow(''),
   bottom_cta_headline: Joi.string().allow(''),
-  bottom_cta_url: Joi.string().uri().allow(''),
-  bottom_cta_text: Joi.string().allow('')
+  bottom_cta_url: Joi.string().allow(''),
+  bottom_cta_text: Joi.string().allow(''),
+  bottom_cta_link_text: Joi.string().allow(''),
+  bottom_cta_link_url: Joi.string().allow('')
 });
 
 const app = express();

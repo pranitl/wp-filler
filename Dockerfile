@@ -49,9 +49,6 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Install Playwright browsers
-RUN npx playwright install chromium
-
 # Copy application files
 COPY . .
 
@@ -64,7 +61,11 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && chown -R pptruser:pptruser /home/pptruser \
     && chown -R pptruser:pptruser /app
 
+# Switch to pptruser before installing browsers
 USER pptruser
+
+# Install Playwright browsers as pptruser
+RUN npx playwright install chromium
 
 # Expose port
 EXPOSE 3000
