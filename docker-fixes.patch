@@ -1,0 +1,97 @@
+From 1bed84c65f3f551a9fe2bc82170b396d4b2f5a01 Mon Sep 17 00:00:00 2001
+From: Local User <user@local>
+Date: Fri, 15 Aug 2025 13:49:57 +0000
+Subject: [PATCH] Fix Docker deployment and validation for production use
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Remove URI validation to accept WordPress shortcodes like [fl_landing_phone]
+- Fix browser configuration to use Chromium instead of Chrome channel
+- Update Dockerfile to install Playwright browsers as non-root user
+- Add missing form fields (bottom_cta_link_text, bottom_cta_link_url) to validation schema
+
+These changes enable the service to run properly in Docker containers and accept
+WordPress-specific field values from n8n workflows.
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ Dockerfile            |  7 ++++---
+ src/browser-config.js |  2 +-
+ src/server.js         | 10 ++++++----
+ 3 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/Dockerfile b/Dockerfile
+index 0038334..b9d4907 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -49,9 +49,6 @@ COPY package*.json ./
+ # Install dependencies
+ RUN npm ci --only=production
+ 
+-# Install Playwright browsers
+-RUN npx playwright install chromium
+-
+ # Copy application files
+ COPY . .
+ 
+@@ -64,8 +61,12 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
+     && chown -R pptruser:pptruser /home/pptruser \
+     && chown -R pptruser:pptruser /app
+ 
++# Switch to pptruser before installing browsers
+ USER pptruser
+ 
++# Install Playwright browsers as pptruser
++RUN npx playwright install chromium
++
+ # Expose port
+ EXPOSE 3000
+ 
+diff --git a/src/browser-config.js b/src/browser-config.js
+index ae4aa5d..4b991c0 100644
+--- a/src/browser-config.js
++++ b/src/browser-config.js
+@@ -14,7 +14,7 @@ const getBrowserConfig = () => {
+     headless: process.env.HEADLESS === 'true',
+     
+     // Use a persistent browser context to maintain cookies/session
+-    channel: 'chrome', // Use actual Chrome instead of Chromium
++    // channel: 'chrome', // Commented out - using Chromium in Docker
+     
+     args: [
+       '--disable-blink-features=AutomationControlled',  // Remove automation flags
+diff --git a/src/server.js b/src/server.js
+index 263d5aa..a99d720 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -35,9 +35,9 @@ const payloadSchema = Joi.object({
+   hero_territories_csv: Joi.string().allow(''),
+   hero_excerpt: Joi.string().allow(''),
+   hero_btn1_text: Joi.string().allow(''),
+-  hero_btn1_url: Joi.string().uri().allow(''),
++  hero_btn1_url: Joi.string().allow(''),
+   hero_btn2_text: Joi.string().allow(''),
+-  hero_btn2_url: Joi.string().uri().allow(''),
++  hero_btn2_url: Joi.string().allow(''),
+   intro_headline: Joi.string().allow(''),
+   intro_html: Joi.string().allow(''),
+   cta_headline: Joi.string().allow(''),
+@@ -49,8 +49,10 @@ const payloadSchema = Joi.object({
+   svc3_name: Joi.string().allow(''),
+   svc4_name: Joi.string().allow(''),
+   bottom_cta_headline: Joi.string().allow(''),
+-  bottom_cta_url: Joi.string().uri().allow(''),
+-  bottom_cta_text: Joi.string().allow('')
++  bottom_cta_url: Joi.string().allow(''),
++  bottom_cta_text: Joi.string().allow(''),
++  bottom_cta_link_text: Joi.string().allow(''),
++  bottom_cta_link_url: Joi.string().allow('')
+ });
+ 
+ const app = express();
+-- 
+2.48.1
+

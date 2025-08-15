@@ -271,19 +271,30 @@ class WordPressFormFiller {
       
       // Fill headline
       if (data.below_headline) {
+        logger.info(`Attempting to fill below_headline: "${data.below_headline}"`);
         const belowHeadlineField = mapping.fields.find(f => f.payloadKey === 'below_headline');
         if (belowHeadlineField) {
-          await page.fill(belowHeadlineField.selector, data.below_headline).catch(() => {});
+          logger.info(`Found below_headline field with selector: ${belowHeadlineField.selector}`);
+          await page.fill(belowHeadlineField.selector, data.below_headline).catch((e) => {
+            logger.error(`Failed to fill below_headline: ${e.message}`);
+          });
+        } else {
+          logger.warn('below_headline field not found in mapping');
         }
+      } else {
+        logger.info('No below_headline in data');
       }
       
       // Fill content if provided (support both below_content and below_text)
       const belowContent = data.below_content || data.below_text;
       if (belowContent) {
+        logger.info(`Attempting to fill below content (${belowContent.length} chars)`);
+        
         // Check if TinyMCE needs initialization
         const needsInit = await page.isVisible('text="Click to initialize TinyMCE"').catch(() => false);
         
         if (needsInit) {
+          logger.info('TinyMCE needs initialization, clicking...');
           await page.click('text="Click to initialize TinyMCE"').catch(() => 
             page.click('.acf-editor-toolbar').catch(() => 
               page.click('.acf-editor-wrap')));
@@ -301,19 +312,27 @@ class WordPressFormFiller {
               editor.insertContent(content);
               editor.save();
               return true;
+            } else {
+              console.log('TinyMCE editor not initialized for acf-editor-198');
+              return false;
             }
+          } else {
+            console.log('TinyMCE not defined');
+            return false;
           }
-          return false;
         }, belowContent);
         
-        if (!filled) {
+        if (filled) {
+          logger.info('Successfully filled below content via TinyMCE');
+        } else {
+          logger.warn('TinyMCE fill failed, trying fallback...');
           // Fallback: try direct fill into the textarea
-          await page.fill('#acf-editor-198', belowContent).catch(() => {
-            logger.warn('Could not fill below content');
+          await page.fill('#acf-editor-198', belowContent).catch((e) => {
+            logger.error(`Could not fill below content: ${e.message}`);
           });
         }
-        
-        logger.debug(`Filled below_content/below_text with ${belowContent.length} characters`);
+      } else {
+        logger.info('No below_content or below_text in data');
       }
     }
   }
@@ -385,43 +404,60 @@ class WordPressFormFiller {
       
       // Fill headline
       if (data.bottom_cta_headline) {
-        await page.fill('#acf-field_62f568766405e', data.bottom_cta_headline).catch(() => {});
+        logger.info(`Attempting to fill bottom_cta_headline: "${data.bottom_cta_headline}"`);
+        await page.fill('#acf-field_62f568766405e', data.bottom_cta_headline).catch((e) => {
+          logger.error(`Failed to fill bottom_cta_headline: ${e.message}`);
+        });
+      } else {
+        logger.info('No bottom_cta_headline in data');
       }
       
       // Fill link if URL and text are provided (support both field name formats)
       const ctaUrl = data.bottom_cta_url || data.bottom_cta_link_url;
       const ctaText = data.bottom_cta_text || data.bottom_cta_link_text;
       
+      logger.info(`Bottom CTA URL: ${ctaUrl || 'none'}, Text: ${ctaText || 'none'}`);
+      
       if (ctaUrl && ctaText) {
         await page.waitForTimeout(500);
         
         // Click Select Link button
+        logger.info('Looking for Select Link button...');
         const selectLinkClicked = await page.evaluate(() => {
           const links = Array.from(document.querySelectorAll('a'));
           for (const link of links) {
             if (link.textContent.trim() === 'Select Link' && link.offsetParent !== null) {
+              console.log('Found and clicking Select Link button');
               link.click();
               return true;
             }
           }
+          console.log('Select Link button not found');
           return false;
         });
         
         if (selectLinkClicked) {
+          logger.info('Select Link button clicked, filling link details...');
           await page.waitForTimeout(1000);
           
           // Fill link details
           try {
             await page.fill('#wp-link-url', ctaUrl);
+            logger.info(`Filled URL: ${ctaUrl}`);
             await page.fill('#wp-link-text', ctaText);
+            logger.info(`Filled text: ${ctaText}`);
             await page.waitForTimeout(500);
             await page.click('#wp-link-submit');
             await page.waitForTimeout(1000);
-            logger.debug('Bottom CTA link added successfully');
+            logger.info('Bottom CTA link added successfully');
           } catch (error) {
-            logger.warn('Could not complete Bottom CTA link setup:', error.message);
+            logger.error('Could not complete Bottom CTA link setup:', error.message);
           }
+        } else {
+          logger.warn('Select Link button was not clicked');
         }
+      } else {
+        logger.info('Missing Bottom CTA URL or text, skipping link setup');
       }
     }
   }
