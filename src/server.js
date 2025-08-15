@@ -44,6 +44,7 @@ const payloadSchema = Joi.object({
   cta_text: Joi.string().allow(''),
   below_headline: Joi.string().allow(''),
   below_content: Joi.string().allow(''),
+  below_text: Joi.string().allow(''), // Support both field names
   svc1_name: Joi.string().allow(''),
   svc2_name: Joi.string().allow(''),
   svc3_name: Joi.string().allow(''),
@@ -52,7 +53,11 @@ const payloadSchema = Joi.object({
   bottom_cta_url: Joi.string().allow(''),
   bottom_cta_text: Joi.string().allow(''),
   bottom_cta_link_text: Joi.string().allow(''),
-  bottom_cta_link_url: Joi.string().allow('')
+  bottom_cta_link_url: Joi.string().allow(''),
+  // Extra fields that may be present but are ignored
+  nc_order: Joi.number().allow(null),
+  Status: Joi.string().allow('', null),
+  DraftURL: Joi.string().allow('', null)
 });
 
 const app = express();
