@@ -277,8 +277,9 @@ class WordPressFormFiller {
         }
       }
       
-      // Fill content if provided
-      if (data.below_content) {
+      // Fill content if provided (support both below_content and below_text)
+      const belowContent = data.below_content || data.below_text;
+      if (belowContent) {
         // Check if TinyMCE needs initialization
         const needsInit = await page.isVisible('text="Click to initialize TinyMCE"').catch(() => false);
         
@@ -289,25 +290,30 @@ class WordPressFormFiller {
           await page.waitForTimeout(500);
         }
         
-        // Direct TinyMCE API approach
+        // Just paste the content directly into TinyMCE visual editor
+        // The below_text field only has visual editor, no text mode option
         const filled = await page.evaluate((content) => {
           if (typeof tinymce !== 'undefined') {
             const editor = tinymce.get('acf-editor-198');
             if (editor && editor.initialized) {
-              editor.setContent(content);
+              // Use insertContent for plain text to preserve formatting
+              editor.setContent(''); // Clear first
+              editor.insertContent(content);
               editor.save();
               return true;
             }
           }
           return false;
-        }, data.below_content);
+        }, belowContent);
         
         if (!filled) {
-          // Fallback to Text mode
-          await page.click('#acf-editor-198-html').catch(() => {});
-          await page.waitForTimeout(300);
-          await page.fill('#acf-editor-198', data.below_content).catch(() => {});
+          // Fallback: try direct fill into the textarea
+          await page.fill('#acf-editor-198', belowContent).catch(() => {
+            logger.warn('Could not fill below content');
+          });
         }
+        
+        logger.debug(`Filled below_content/below_text with ${belowContent.length} characters`);
       }
     }
   }
@@ -382,8 +388,11 @@ class WordPressFormFiller {
         await page.fill('#acf-field_62f568766405e', data.bottom_cta_headline).catch(() => {});
       }
       
-      // Fill link if URL and text are provided
-      if (data.bottom_cta_url && data.bottom_cta_text) {
+      // Fill link if URL and text are provided (support both field name formats)
+      const ctaUrl = data.bottom_cta_url || data.bottom_cta_link_url;
+      const ctaText = data.bottom_cta_text || data.bottom_cta_link_text;
+      
+      if (ctaUrl && ctaText) {
         await page.waitForTimeout(500);
         
         // Click Select Link button
@@ -403,8 +412,8 @@ class WordPressFormFiller {
           
           // Fill link details
           try {
-            await page.fill('#wp-link-url', data.bottom_cta_url);
-            await page.fill('#wp-link-text', data.bottom_cta_text);
+            await page.fill('#wp-link-url', ctaUrl);
+            await page.fill('#wp-link-text', ctaText);
             await page.waitForTimeout(500);
             await page.click('#wp-link-submit');
             await page.waitForTimeout(1000);
