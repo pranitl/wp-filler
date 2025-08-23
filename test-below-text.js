@@ -6,6 +6,15 @@ require('dotenv').config();
 async function testBelowTextFilling() {
   console.log('🧪 Testing Below Text Field HTML Mode Switch\n');
   
+  // Check required environment variables
+  if (!process.env.WP_ADMIN_URL || !process.env.WP_USERNAME || !process.env.WP_PASSWORD) {
+    console.error('❌ Missing required environment variables. Please create a .env file with:');
+    console.error('WP_ADMIN_URL=your-wordpress-site-url/wp-admin');
+    console.error('WP_USERNAME=your-username');
+    console.error('WP_PASSWORD=your-password');
+    return;
+  }
+  
   // Simple test data focusing on the below_text field
   const testData = {
     "header_headline": "Test Page - HTML Mode Switch",
@@ -15,7 +24,7 @@ async function testBelowTextFilling() {
   };
 
   const browser = await chromium.launch({
-    headless: true, // Run in headless mode for server environment
+    headless: false, // Run with visible browser
     slowMo: 100 // Slight delay for stability
   });
   
@@ -24,6 +33,13 @@ async function testBelowTextFilling() {
   });
   
   const page = await context.newPage();
+  
+  // Listen to console messages from the browser
+  page.on('console', msg => {
+    if (msg.type() === 'log') {
+      console.log('Browser:', msg.text());
+    }
+  });
 
   try {
     // Login
@@ -56,21 +72,46 @@ async function testBelowTextFilling() {
     // Wait a bit to see the result
     await page.waitForTimeout(3000);
     
-    // Check if the content was filled correctly
+    // Check if the content was filled correctly - use the same detection logic as form filler
     const filledContent = await page.evaluate(() => {
-      const textarea = document.querySelector('#acf-editor-199');
-      if (textarea) {
-        return {
-          isVisible: textarea.style.display !== 'none',
-          content: textarea.value,
-          wrapperClasses: document.querySelector('#wp-acf-editor-199-wrap')?.className
-        };
+      console.log('Test verification: Looking for filled content...');
+      
+      // Use the same logic as the form filler to find the editor
+      const editorWraps = document.querySelectorAll('[id*="wp-acf-editor-"][id$="-wrap"]');
+      console.log(`Test: Found ${editorWraps.length} wp-editor-wrap elements`);
+      
+      for (let wrap of editorWraps) {
+        console.log(`Test: Checking wrap: ${wrap.id}`);
+        const textarea = wrap.querySelector('textarea[id*="acf-editor-"]');
+        if (textarea) {
+          console.log(`Test: Found textarea: ${textarea.id}`);
+          
+          const fieldContainer = textarea.closest('.acf-field');
+          if (fieldContainer) {
+            const fieldName = fieldContainer.getAttribute('data-name');
+            console.log(`Test: Field name: ${fieldName}`);
+            
+            if (fieldName && fieldName.includes('below')) {
+              console.log(`Test: This is the below form editor`);
+              return {
+                isVisible: textarea.style.display !== 'none',
+                content: textarea.value,
+                wrapperClasses: wrap.className,
+                editorId: textarea.id,
+                fieldName: fieldName
+              };
+            }
+          }
+        }
       }
+      
+      console.log('Test: No suitable editor found for verification');
       return null;
     });
     
     if (filledContent) {
       console.log('\n✅ Test Results:');
+      console.log('- Editor ID found:', filledContent.editorId);
       console.log('- Textarea visible:', filledContent.isVisible);
       console.log('- Editor mode:', filledContent.wrapperClasses?.includes('html-active') ? 'HTML' : 'Visual');
       console.log('- Content filled:', filledContent.content?.length > 0 ? 'Yes' : 'No');

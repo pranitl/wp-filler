@@ -290,42 +290,101 @@ class WordPressFormFiller {
       if (belowContent) {
         logger.info(`Attempting to fill below content (${belowContent.length} chars)`);
         
-        // Check if TinyMCE needs initialization
-        const needsInit = await page.isVisible('text="Click to initialize TinyMCE"').catch(() => false);
+        // Wait for the editor to load after expanding the panel
+        await page.waitForTimeout(1000);
         
-        if (needsInit) {
-          logger.info('TinyMCE needs initialization, clicking...');
-          await page.click('text="Click to initialize TinyMCE"').catch(() => 
-            page.click('.acf-editor-toolbar').catch(() => 
-              page.click('.acf-editor-wrap')));
-          await page.waitForTimeout(500);
+        // Try to initialize TinyMCE if needed (specifically for Below Form section)
+        let editorInitialized = false;
+        try {
+          const initButtons = await page.locator('text="Click to initialize TinyMCE"').all();
+          for (const button of initButtons) {
+            if (await button.isVisible()) {
+              logger.info('Initializing TinyMCE editor for below content');
+              await button.click();
+              await page.waitForTimeout(2000); // Wait for TinyMCE to fully initialize
+              editorInitialized = true;
+              break;
+            }
+          }
+        } catch (e) {
+          // No init button found or error clicking, continue
         }
+        
+        // Wait for editor elements to be created after initialization
+        if (editorInitialized) {
+          try {
+            await page.waitForSelector('[id*="wp-acf-editor-"][id$="-wrap"]', { timeout: 5000 });
+            logger.info('TinyMCE editor initialized successfully');
+          } catch (e) {
+            logger.warn('TinyMCE editor elements did not appear after initialization');
+          }
+        }
+        
+        // Find the Below Form content editor dynamically
+        const editorInfo = await page.evaluate(() => {
+          // Look for TinyMCE editor wrappers after initialization
+          const editorWraps = document.querySelectorAll('[id*="wp-acf-editor-"][id$="-wrap"]');
+          
+          for (let wrap of editorWraps) {
+            const textarea = wrap.querySelector('textarea[id*="acf-editor-"]');
+            if (textarea) {
+              // Check if this is in the Below Form section
+              const fieldContainer = textarea.closest('.acf-field');
+              if (fieldContainer) {
+                const fieldName = fieldContainer.getAttribute('data-name');
+                const label = fieldContainer.querySelector('.acf-label label');
+                
+                // Look for below-related content field
+                if ((fieldName && fieldName.includes('below')) || 
+                    (label && label.textContent && label.textContent.toLowerCase().includes('below'))) {
+                  
+                  return {
+                    editorId: textarea.id.replace('acf-editor-', ''),
+                    textareaId: textarea.id,
+                    wrapId: wrap.id,
+                    htmlTabId: `${textarea.id}-html`,
+                    iframeId: `${textarea.id}_ifr`
+                  };
+                }
+              }
+            }
+          }
+          
+          return null;
+        });
+        
+        if (!editorInfo) {
+          logger.error('Could not find below_text editor');
+          return;
+        }
+        
+        logger.info(`Found below content editor: ${editorInfo.textareaId}`);
         
         // Switch editor to HTML mode to properly handle HTML content
         logger.info('Switching editor to HTML mode for below_text field');
-        const switchedToHtml = await page.evaluate(() => {
-          // Find the wrapper div for editor 199 (below_text field)
-          const wrapperDiv = document.querySelector('#wp-acf-editor-199-wrap');
+        const switchedToHtml = await page.evaluate((editorInfo) => {
+          // Find the wrapper div using dynamic ID
+          const wrapperDiv = document.querySelector(`#${editorInfo.wrapId}`);
           if (wrapperDiv) {
             // Remove tmce-active class and add html-active class
             wrapperDiv.classList.remove('tmce-active');
             wrapperDiv.classList.add('html-active');
             
             // Try to trigger the HTML tab if it exists
-            const htmlTab = document.querySelector('#acf-editor-199-html');
+            const htmlTab = document.querySelector(`#${editorInfo.htmlTabId}`);
             if (htmlTab) {
               htmlTab.click();
             }
             
             // Make sure the textarea is visible
-            const textarea = document.querySelector('#acf-editor-199');
+            const textarea = document.querySelector(`#${editorInfo.textareaId}`);
             if (textarea) {
               textarea.style.display = 'block';
               textarea.removeAttribute('aria-hidden');
             }
             
             // Hide the iframe if it exists
-            const iframe = document.querySelector('#acf-editor-199_ifr');
+            const iframe = document.querySelector(`#${editorInfo.textareaId}_ifr`);
             if (iframe) {
               iframe.style.display = 'none';
             }
@@ -333,14 +392,14 @@ class WordPressFormFiller {
             return true;
           }
           return false;
-        });
+        }, editorInfo);
         
         if (switchedToHtml) {
           logger.info('Successfully switched to HTML mode');
           
           // Now fill the textarea directly with HTML content
           try {
-            await page.fill('#acf-editor-199', belowContent);
+            await page.fill(`#${editorInfo.textareaId}`, belowContent);
             logger.info('Successfully filled below content in HTML mode');
           } catch (e) {
             logger.error(`Could not fill below content: ${e.message}`);
@@ -350,9 +409,8 @@ class WordPressFormFiller {
           logger.warn('Could not switch to HTML mode, trying TinyMCE fallback');
           const filled = await page.evaluate((content) => {
             if (typeof tinymce !== 'undefined') {
-              const editor = tinymce.get('acf-editor-199');
+              const editor = tinymce.get(`${editorInfo.textareaId}`);
               if (editor && editor.initialized) {
-                // Set content directly as HTML
                 editor.setContent(content);
                 editor.save();
                 return true;
@@ -365,7 +423,7 @@ class WordPressFormFiller {
             logger.info('Successfully filled below content via TinyMCE');
           } else {
             logger.warn('TinyMCE fill failed, trying direct textarea fill');
-            await page.fill('#acf-editor-199', belowContent).catch((e) => {
+            await page.fill(`#${editorInfo.textareaId}`, belowContent).catch((e) => {
               logger.error(`Could not fill below content: ${e.message}`);
             });
           }
