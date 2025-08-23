@@ -202,7 +202,6 @@ async function createLandingPage(data) {
     return { 
       success: true, 
       url: result.previewUrl,
-      previewUrl: result.previewUrl,
       message: result.message
     };
 
@@ -260,7 +259,6 @@ app.post('/create-landing', async (req, res) => {
       success: true,
       message: 'Landing page created and saved as draft successfully',
       url: result.url,
-      previewUrl: result.previewUrl,
       timestamp: new Date().toISOString()
     });
 
@@ -322,7 +320,6 @@ app.post('/test', async (req, res) => {
       success: true,
       message: 'Test page created and saved as draft successfully',
       url: result.url,
-      previewUrl: result.previewUrl,
       timestamp: new Date().toISOString(),
       testData
     });

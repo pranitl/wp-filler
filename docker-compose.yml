@@ -4,8 +4,9 @@ services:
   wp-filler:
     build: .
     container_name: wp-filler
-    ports:
-      - "3000:3000"
+    # No external ports - internal only for n8n access
+    expose:
+      - "3000"
     env_file:
       - .env
     environment:
@@ -16,7 +17,7 @@ services:
       - ./config:/app/config:ro
     restart: unless-stopped
     networks:
-      - wp-filler-network
+      - shared-network
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
@@ -47,5 +48,5 @@ services:
       - dev
 
 networks:
-  wp-filler-network:
-    driver: bridge
+  shared-network:
+    external: true

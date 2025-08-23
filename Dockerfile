@@ -52,14 +52,15 @@ RUN npm ci --only=production
 # Copy application files
 COPY . .
 
-# Create logs directory
+# Create logs directory with proper permissions
 RUN mkdir -p logs/screenshots
 
 # Set user to non-root
 RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && mkdir -p /home/pptruser/Downloads \
     && chown -R pptruser:pptruser /home/pptruser \
-    && chown -R pptruser:pptruser /app
+    && chown -R pptruser:pptruser /app \
+    && chmod -R 755 /app/logs
 
 # Switch to pptruser before installing browsers
 USER pptruser
