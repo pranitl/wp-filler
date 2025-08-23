@@ -301,35 +301,74 @@ class WordPressFormFiller {
           await page.waitForTimeout(500);
         }
         
-        // Just paste the content directly into TinyMCE visual editor
-        // The below_text field only has visual editor, no text mode option
-        const filled = await page.evaluate((content) => {
-          if (typeof tinymce !== 'undefined') {
-            const editor = tinymce.get('acf-editor-198');
-            if (editor && editor.initialized) {
-              // Use insertContent for plain text to preserve formatting
-              editor.setContent(''); // Clear first
-              editor.insertContent(content);
-              editor.save();
-              return true;
-            } else {
-              console.log('TinyMCE editor not initialized for acf-editor-198');
-              return false;
+        // Switch editor to HTML mode to properly handle HTML content
+        logger.info('Switching editor to HTML mode for below_text field');
+        const switchedToHtml = await page.evaluate(() => {
+          // Find the wrapper div for editor 199 (below_text field)
+          const wrapperDiv = document.querySelector('#wp-acf-editor-199-wrap');
+          if (wrapperDiv) {
+            // Remove tmce-active class and add html-active class
+            wrapperDiv.classList.remove('tmce-active');
+            wrapperDiv.classList.add('html-active');
+            
+            // Try to trigger the HTML tab if it exists
+            const htmlTab = document.querySelector('#acf-editor-199-html');
+            if (htmlTab) {
+              htmlTab.click();
             }
-          } else {
-            console.log('TinyMCE not defined');
-            return false;
+            
+            // Make sure the textarea is visible
+            const textarea = document.querySelector('#acf-editor-199');
+            if (textarea) {
+              textarea.style.display = 'block';
+              textarea.removeAttribute('aria-hidden');
+            }
+            
+            // Hide the iframe if it exists
+            const iframe = document.querySelector('#acf-editor-199_ifr');
+            if (iframe) {
+              iframe.style.display = 'none';
+            }
+            
+            return true;
           }
-        }, belowContent);
+          return false;
+        });
         
-        if (filled) {
-          logger.info('Successfully filled below content via TinyMCE');
-        } else {
-          logger.warn('TinyMCE fill failed, trying fallback...');
-          // Fallback: try direct fill into the textarea
-          await page.fill('#acf-editor-198', belowContent).catch((e) => {
+        if (switchedToHtml) {
+          logger.info('Successfully switched to HTML mode');
+          
+          // Now fill the textarea directly with HTML content
+          try {
+            await page.fill('#acf-editor-199', belowContent);
+            logger.info('Successfully filled below content in HTML mode');
+          } catch (e) {
             logger.error(`Could not fill below content: ${e.message}`);
-          });
+          }
+        } else {
+          // Fallback to original TinyMCE method if switching failed
+          logger.warn('Could not switch to HTML mode, trying TinyMCE fallback');
+          const filled = await page.evaluate((content) => {
+            if (typeof tinymce !== 'undefined') {
+              const editor = tinymce.get('acf-editor-199');
+              if (editor && editor.initialized) {
+                // Set content directly as HTML
+                editor.setContent(content);
+                editor.save();
+                return true;
+              }
+            }
+            return false;
+          }, belowContent);
+          
+          if (filled) {
+            logger.info('Successfully filled below content via TinyMCE');
+          } else {
+            logger.warn('TinyMCE fill failed, trying direct textarea fill');
+            await page.fill('#acf-editor-199', belowContent).catch((e) => {
+              logger.error(`Could not fill below content: ${e.message}`);
+            });
+          }
         }
       } else {
         logger.info('No below_content or below_text in data');

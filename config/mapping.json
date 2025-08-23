@@ -185,7 +185,7 @@
     {
       "payloadKey": "below_text_html_button",
       "type": "button",
-      "selector": "#acf-editor-198-html",
+      "selector": "#acf-editor-199-html",
       "action": "click",
       "panel": "panel_below_form",
       "description": "Switch to Text mode for Below Form editor"
@@ -193,12 +193,12 @@
     {
       "payloadKey": "below_content",
       "type": "tinymce",
-      "selector": "#acf-editor-198",
+      "selector": "#acf-editor-199",
       "alternativeSelectors": [
-        "#acf-editor-198_ifr",
+        "#acf-editor-199_ifr",
         "#tinymce"
       ],
-      "editorId": "acf-editor-198",
+      "editorId": "acf-editor-199",
       "panel": "panel_below_form",
       "description": "Below Form content editor"
     },
