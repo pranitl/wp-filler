@@ -153,7 +153,15 @@ class WordPressFormFiller {
     const heroPanel = mapping.panels.find(p => p.key === 'panel_hero_area');
     
     if (heroPanel) {
-      await page.click(heroPanel.selector).catch(() => page.click('text="Hero Area"'));
+      // Try the specific selector first, with proper wait and scroll
+      try {
+        await page.waitForSelector(heroPanel.selector, { timeout: 5000 });
+        await page.locator(heroPanel.selector).scrollIntoViewIfNeeded();
+        await page.click(heroPanel.selector);
+      } catch (error) {
+        logger.warn('Could not click Hero Area tab with selector, trying text selector');
+        await page.click('text="Hero Area"');
+      }
       await page.waitForTimeout(1500);
       
       const heroFields = [
@@ -185,7 +193,14 @@ class WordPressFormFiller {
     const introPanel = mapping.panels.find(p => p.key === 'panel_intro_content');
     
     if (introPanel) {
-      await page.click(introPanel.selector).catch(() => page.click('text="Intro Content"'));
+      try {
+        await page.waitForSelector(introPanel.selector, { timeout: 5000 });
+        await page.locator(introPanel.selector).scrollIntoViewIfNeeded();
+        await page.click(introPanel.selector);
+      } catch (error) {
+        logger.warn('Could not click Intro Content tab with selector, trying text selector');
+        await page.click('text="Intro Content"');
+      }
       await page.waitForTimeout(1500);
       
       // Fill headline
@@ -236,7 +251,14 @@ class WordPressFormFiller {
     const ctaPanel = mapping.panels.find(p => p.key === 'panel_top_cta');
     
     if (ctaPanel) {
-      await page.click(ctaPanel.selector).catch(() => page.click('text="Call to Action"'));
+      try {
+        await page.waitForSelector(ctaPanel.selector, { timeout: 5000 });
+        await page.locator(ctaPanel.selector).scrollIntoViewIfNeeded();
+        await page.click(ctaPanel.selector);
+      } catch (error) {
+        logger.warn('Could not click Call to Action tab with selector, trying text selector');
+        await page.click('text="Call to Action"');
+      }
       await page.waitForTimeout(1500);
       
       // Fill CTA headline
@@ -266,7 +288,14 @@ class WordPressFormFiller {
     const belowPanel = mapping.panels.find(p => p.key === 'panel_below_form');
     
     if (belowPanel) {
-      await page.click(belowPanel.selector).catch(() => page.click('text="Below Form"'));
+      try {
+        await page.waitForSelector(belowPanel.selector, { timeout: 5000 });
+        await page.locator(belowPanel.selector).scrollIntoViewIfNeeded();
+        await page.click(belowPanel.selector);
+      } catch (error) {
+        logger.warn('Could not click Below Form tab with selector, trying text selector');
+        await page.click('text="Below Form"');
+      }
       await page.waitForTimeout(1500);
       
       // Fill headline
@@ -383,10 +412,14 @@ class WordPressFormFiller {
               textarea.removeAttribute('aria-hidden');
             }
             
-            // Hide the iframe if it exists
+            // Hide the iframe and TinyMCE editor completely
             const iframe = document.querySelector(`#${editorInfo.textareaId}_ifr`);
             if (iframe) {
               iframe.style.display = 'none';
+            }
+            const mceContainer = document.querySelector('.mce-tinymce');
+            if (mceContainer) {
+              mceContainer.style.display = 'none';
             }
             
             return true;
@@ -397,35 +430,138 @@ class WordPressFormFiller {
         if (switchedToHtml) {
           logger.info('Successfully switched to HTML mode');
           
-          // Now fill the textarea directly with HTML content
+          // Now fill the textarea directly with HTML content using evaluate to avoid double encoding
           try {
-            await page.fill(`#${editorInfo.textareaId}`, belowContent);
-            logger.info('Successfully filled below content in HTML mode');
+            const filled = await page.evaluate(({textareaId, content}) => {
+              const textarea = document.querySelector(`#${textareaId}`);
+              if (textarea) {
+                // Clean the content - remove any escaped quotes
+                let cleanContent = content.replace(/\\"/g, '"').replace(/\\'/g, "'");
+                
+                // Set the value directly without encoding
+                textarea.value = cleanContent;
+                
+                // Trigger multiple events to ensure WordPress recognizes the HTML
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                textarea.dispatchEvent(new Event('blur', { bubbles: true }));
+                
+                // Trigger jQuery events for ACF
+                if (typeof jQuery !== 'undefined' && jQuery(textarea).length) {
+                  jQuery(textarea).trigger('change').trigger('input').trigger('blur');
+                }
+                
+                // CRITICAL: Also update TinyMCE if it exists
+                if (typeof tinymce !== 'undefined' && tinymce.get(textareaId)) {
+                  const editor = tinymce.get(textareaId);
+                  if (editor) {
+                    editor.setContent(cleanContent);
+                    editor.save(); // This syncs TinyMCE content back to the textarea
+                  }
+                }
+                
+                // Trigger ACF field update if available
+                if (window.acf) {
+                  const $field = jQuery(textarea).closest('.acf-field');
+                  if ($field.length) {
+                    const field = acf.getField($field);
+                    if (field) {
+                      field.val(cleanContent);
+                      field.trigger('change');
+                    }
+                  }
+                }
+                
+                return true;
+              }
+              return false;
+            }, {textareaId: editorInfo.textareaId, content: belowContent});
+            
+            if (filled) {
+              logger.info('Successfully filled below content in HTML mode');
+              // Give WordPress/ACF time to process the change
+              await page.waitForTimeout(500);
+            } else {
+              throw new Error('Could not find textarea element');
+            }
           } catch (e) {
             logger.error(`Could not fill below content: ${e.message}`);
           }
         } else {
           // Fallback to original TinyMCE method if switching failed
           logger.warn('Could not switch to HTML mode, trying TinyMCE fallback');
-          const filled = await page.evaluate((content) => {
+          const filled = await page.evaluate(({editorId, content}) => {
+            // Clean the content first
+            let cleanContent = content.replace(/\\"/g, '"').replace(/\\'/g, "'");
+            
+            // Try TinyMCE first
             if (typeof tinymce !== 'undefined') {
-              const editor = tinymce.get(`${editorInfo.textareaId}`);
+              const editor = tinymce.get(editorId);
               if (editor && editor.initialized) {
-                editor.setContent(content);
-                editor.save();
+                // Set content as HTML
+                editor.setContent(cleanContent);
+                editor.save(); // Sync to textarea
+                
+                // Also update the textarea directly
+                const textarea = document.querySelector(`#${editorId}`);
+                if (textarea) {
+                  textarea.value = cleanContent;
+                  
+                  // Trigger events
+                  if (typeof jQuery !== 'undefined') {
+                    jQuery(textarea).trigger('change').trigger('input');
+                  }
+                }
                 return true;
               }
             }
+            
+            // If TinyMCE failed, update textarea directly
+            const textarea = document.querySelector(`#${editorId}`);
+            if (textarea) {
+              textarea.value = cleanContent;
+              textarea.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            }
+            
             return false;
-          }, belowContent);
+          }, {editorId: editorInfo.textareaId, content: belowContent});
           
           if (filled) {
             logger.info('Successfully filled below content via TinyMCE');
           } else {
-            logger.warn('TinyMCE fill failed, trying direct textarea fill');
-            await page.fill(`#${editorInfo.textareaId}`, belowContent).catch((e) => {
+            logger.warn('TinyMCE fill failed, trying comprehensive fill approach');
+            try {
+              await page.evaluate(({textareaId, content}) => {
+                // Clean the content
+                let cleanContent = content.replace(/\\"/g, '"').replace(/\\'/g, "'");
+                
+                const textarea = document.querySelector(`#${textareaId}`);
+                if (textarea) {
+                  // Set the value
+                  textarea.value = cleanContent;
+                  
+                  // Trigger all possible events
+                  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                  textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                  textarea.dispatchEvent(new Event('blur', { bubbles: true }));
+                  
+                  // jQuery triggers
+                  if (typeof jQuery !== 'undefined') {
+                    jQuery(textarea).trigger('change').trigger('input').trigger('blur');
+                  }
+                  
+                  // One more attempt at TinyMCE
+                  if (typeof tinymce !== 'undefined' && tinymce.get(textareaId)) {
+                    tinymce.get(textareaId).setContent(cleanContent);
+                    tinymce.get(textareaId).save();
+                  }
+                }
+              }, {textareaId: editorInfo.textareaId, content: belowContent});
+              logger.info('Executed comprehensive fill approach for below content');
+            } catch (e) {
               logger.error(`Could not fill below content: ${e.message}`);
-            });
+            }
           }
         }
       } else {
@@ -443,7 +579,14 @@ class WordPressFormFiller {
     const servicesPanel = mapping.panels.find(p => p.key === 'panel_services_grid');
     
     if (servicesPanel) {
-      await page.click(servicesPanel.selector).catch(() => page.click('text="Services Grid"'));
+      try {
+        await page.waitForSelector(servicesPanel.selector, { timeout: 5000 });
+        await page.locator(servicesPanel.selector).scrollIntoViewIfNeeded();
+        await page.click(servicesPanel.selector);
+      } catch (error) {
+        logger.warn('Could not click Services Grid tab with selector, trying text selector');
+        await page.click('text="Services Grid"');
+      }
       await page.waitForTimeout(1500);
       
       // Get services from data
@@ -496,7 +639,14 @@ class WordPressFormFiller {
     const bottomCTAPanel = mapping.panels.find(p => p.key === 'panel_bottom_cta');
     
     if (bottomCTAPanel) {
-      await page.click(bottomCTAPanel.selector).catch(() => page.click('a:has-text("Bottom CTA")'));
+      try {
+        await page.waitForSelector(bottomCTAPanel.selector, { timeout: 5000 });
+        await page.locator(bottomCTAPanel.selector).scrollIntoViewIfNeeded();
+        await page.click(bottomCTAPanel.selector);
+      } catch (error) {
+        logger.warn('Could not click Bottom CTA tab with selector, trying text selector');
+        await page.click('a:has-text("Bottom CTA")');
+      }
       await page.waitForTimeout(1500);
       
       // Fill headline

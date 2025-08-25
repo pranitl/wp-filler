@@ -42,9 +42,9 @@ const payloadSchema = Joi.object({
   intro_html: Joi.string().allow(''),
   cta_headline: Joi.string().allow(''),
   cta_text: Joi.string().allow(''),
-  below_headline: Joi.string().allow(''),
-  below_content: Joi.string().allow(''),
-  below_text: Joi.string().allow(''), // Support both field names
+  below_headline: Joi.string().allow('', null).default(''),
+  below_content: Joi.string().allow('', null).default(''),
+  below_text: Joi.string().allow('', null).default(''), // Support both field names
   svc1_name: Joi.string().allow(''),
   svc2_name: Joi.string().allow(''),
   svc3_name: Joi.string().allow(''),
@@ -238,6 +238,12 @@ app.post('/create-landing', async (req, res) => {
     let data = req.body;
     if (data.rows && Array.isArray(data.rows) && data.rows.length > 0) {
       data = data.rows[0];
+    }
+
+    // Normalize field names before validation
+    if ('below_text' in data && !('below_content' in data)) {
+      data.below_content = data.below_text;
+      delete data.below_text;
     }
 
     // Validate payload
