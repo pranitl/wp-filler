@@ -3,7 +3,8 @@
     "allow": [
       "Bash(gh repo create:*)",
       "Bash(mkdir:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(HEADLESS=false node test-field-filling.js)"
     ],
     "deny": [],
     "ask": []
