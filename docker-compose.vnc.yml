@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # VNC Browser for manual login
+  browser-vnc:
+    image: selenium/standalone-chrome:latest
+    container_name: wp-browser-vnc
+    ports:
+      - "4444:4444"  # Selenium port
+      - "5900:5900"  # VNC port
+      - "7900:7900"  # noVNC web interface
+    environment:
+      - SE_VNC_NO_PASSWORD=1
+      - SE_NODE_MAX_SESSIONS=1
+      - SE_NODE_SESSION_TIMEOUT=86400
+    shm_size: '2gb'
+    networks:
+      - shared-network
+    volumes:
+      - ./browser-session:/home/seluser/session
+
+networks:
+  shared-network:
+    external: true

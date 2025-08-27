@@ -315,6 +315,13 @@ class WordPressFormFiller {
       }
       
       // Fill content if provided (support both below_content and below_text)
+      logger.info('Checking for below content fields:', {
+        has_below_content: !!data.below_content,
+        has_below_text: !!data.below_text,
+        below_content_value: data.below_content ? data.below_content.substring(0, 50) + '...' : 'undefined',
+        below_text_value: data.below_text ? data.below_text.substring(0, 50) + '...' : 'undefined'
+      });
+      
       const belowContent = data.below_content || data.below_text;
       if (belowContent) {
         logger.info(`Attempting to fill below content (${belowContent.length} chars)`);
@@ -342,7 +349,8 @@ class WordPressFormFiller {
         // Wait for editor elements to be created after initialization
         if (editorInitialized) {
           try {
-            await page.waitForSelector('[id*="wp-acf-editor-"][id$="-wrap"]', { timeout: 5000 });
+            // Wait for any ACF editor wrapper to appear (handles both patterns)
+            await page.waitForSelector('[id^="wp-acf-editor-"][id$="-wrap"], [id*="wp-acf-editor-"][id$="-wrap"]', { timeout: 5000 });
             logger.info('TinyMCE editor initialized successfully');
           } catch (e) {
             logger.warn('TinyMCE editor elements did not appear after initialization');
@@ -351,24 +359,33 @@ class WordPressFormFiller {
         
         // Find the Below Form content editor dynamically
         const editorInfo = await page.evaluate(() => {
-          // Look for TinyMCE editor wrappers after initialization
-          const editorWraps = document.querySelectorAll('[id*="wp-acf-editor-"][id$="-wrap"]');
+          // Look for ACF editor wrapper divs - they can start with either pattern
+          const editorWraps = document.querySelectorAll('[id^="wp-acf-editor-"][id$="-wrap"], [id*="wp-acf-editor-"][id$="-wrap"]');
           
           for (let wrap of editorWraps) {
-            const textarea = wrap.querySelector('textarea[id*="acf-editor-"]');
+            const textarea = wrap.querySelector('textarea[id^="acf-editor-"], textarea[id*="acf-editor-"]');
             if (textarea) {
               // Check if this is in the Below Form section
               const fieldContainer = textarea.closest('.acf-field');
               if (fieldContainer) {
                 const fieldName = fieldContainer.getAttribute('data-name');
+                const fieldKey = fieldContainer.getAttribute('data-key');
                 const label = fieldContainer.querySelector('.acf-label label');
                 
-                // Look for below-related content field
-                if ((fieldName && fieldName.includes('below')) || 
-                    (label && label.textContent && label.textContent.toLowerCase().includes('below'))) {
+                // Look for below-related content field by multiple indicators
+                const isBelow = 
+                  (fieldName && fieldName.toLowerCase().includes('below')) ||
+                  (fieldKey && fieldKey === 'field_091kfmjg85g4g') || // The specific field key
+                  (label && label.textContent && label.textContent.toLowerCase().includes('below')) ||
+                  // Also check if the textarea name attribute matches
+                  (textarea.name === 'acf[field_091kfmjg85g4g]');
+                
+                if (isBelow) {
+                  // Extract the numeric ID from the textarea ID (e.g., "acf-editor-201" -> "201")
+                  const editorNum = textarea.id.match(/acf-editor-(\d+)/)?.[1] || textarea.id.replace('acf-editor-', '');
                   
                   return {
-                    editorId: textarea.id.replace('acf-editor-', ''),
+                    editorId: editorNum,
                     textareaId: textarea.id,
                     wrapId: wrap.id,
                     htmlTabId: `${textarea.id}-html`,
@@ -376,6 +393,22 @@ class WordPressFormFiller {
                   };
                 }
               }
+            }
+          }
+          
+          // Fallback: Look for textarea by name attribute directly
+          const textareaByName = document.querySelector('textarea[name="acf[field_091kfmjg85g4g]"]');
+          if (textareaByName) {
+            const wrap = textareaByName.closest('[id$="-wrap"]');
+            if (wrap) {
+              const editorNum = textareaByName.id.match(/acf-editor-(\d+)/)?.[1] || textareaByName.id.replace('acf-editor-', '');
+              return {
+                editorId: editorNum,
+                textareaId: textareaByName.id,
+                wrapId: wrap.id,
+                htmlTabId: `${textareaByName.id}-html`,
+                iframeId: `${textareaByName.id}_ifr`
+              };
             }
           }
           

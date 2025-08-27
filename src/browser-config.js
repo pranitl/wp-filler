@@ -25,7 +25,20 @@ const getBrowserConfig = () => {
       '--disable-features=IsolateOrigins,site-per-process',
       '--start-maximized',
       '--window-size=1920,1080',
-      '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      '--disable-infobars',
+      '--exclude-switches=enable-automation',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-plugins-discovery',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=TranslateUI',
+      '--disable-ipc-flooding-protection',
+      '--password-store=basic',
+      '--use-mock-keychain',
+      '--force-color-profile=srgb'
     ],
     
     // Slow down actions to appear more human
@@ -39,7 +52,7 @@ const getContextConfig = () => {
     viewport: { width: 1920, height: 1080 },
     
     // Set user agent to match a real browser
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     
     // Accept language
     locale: 'en-US',
@@ -79,11 +92,31 @@ const getContextConfig = () => {
 
 // Function to apply stealth mode to a context (must be called before creating pages)
 const applyStealthMode = async (context) => {
-  // Override the navigator.webdriver property
+  // Override the navigator.webdriver property and delete it
   await context.addInitScript(() => {
+    // Remove webdriver property
     Object.defineProperty(navigator, 'webdriver', {
       get: () => undefined
     });
+    delete navigator.__proto__.webdriver;
+    
+    // Override chrome.runtime check
+    if (!window.chrome) {
+      window.chrome = {};
+    }
+    if (!window.chrome.runtime) {
+      window.chrome.runtime = {};
+    }
+    
+    // Override Notification permissions to avoid detection
+    const originalQuery = window.navigator.permissions?.query;
+    if (originalQuery) {
+      window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+          Promise.resolve({ state: Notification.permission }) :
+          originalQuery(parameters)
+      );
+    }
   });
   
   // Override navigator.plugins to appear more realistic
@@ -163,6 +196,45 @@ const applyStealthMode = async (context) => {
     Object.defineProperty(screen, 'pixelDepth', { get: () => 24 });
   });
   
+  // Add WebGL vendor and renderer spoofing
+  await context.addInitScript(() => {
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+      if (parameter === 37445) {
+        return 'Intel Inc.';
+      }
+      if (parameter === 37446) {
+        return 'Intel Iris OpenGL Engine';
+      }
+      return getParameter.apply(this, arguments);
+    };
+
+    const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+    WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+      if (parameter === 37445) {
+        return 'Intel Inc.';
+      }
+      if (parameter === 37446) {
+        return 'Intel Iris OpenGL Engine';
+      }
+      return getParameter2.apply(this, arguments);
+    };
+  });
+
+  // Add Canvas fingerprint protection
+  await context.addInitScript(() => {
+    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function() {
+      const context = this.getContext('2d');
+      const imageData = context.getImageData(0, 0, this.width, this.height);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        imageData.data[i] = imageData.data[i] ^ (Math.random() * 0.1);
+      }
+      context.putImageData(imageData, 0, 0);
+      return originalToDataURL.apply(this, arguments);
+    };
+  });
+
   // Add random mouse movements and delays (to be called with page)
   const addHumanBehavior = async (page) => {
     // Random mouse movement
@@ -193,8 +265,21 @@ const saveState = async (context, stateFile = 'browser-state.json') => {
 
 // Load browser state
 const loadState = async (stateFile = 'browser-state.json') => {
-  const statePath = path.join(getUserDataDir(), stateFile);
   const fs = require('fs').promises;
+  
+  // First check for manually captured session
+  const manualSessionPath = path.join(process.cwd(), '.wp-session', 'session.json');
+  try {
+    await fs.access(manualSessionPath);
+    const content = await fs.readFile(manualSessionPath, 'utf8');
+    console.log('Using manually captured session from .wp-session/session.json');
+    return JSON.parse(content);
+  } catch (e) {
+    // Manual session not found, continue with auto-saved session
+  }
+  
+  // Check for auto-saved session
+  const statePath = path.join(getUserDataDir(), stateFile);
   try {
     await fs.access(statePath);
     return statePath;
