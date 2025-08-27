@@ -25,6 +25,31 @@ const logger = winston.createLogger({
   ]
 });
 
+// Initialize queue variable
+let queue;
+
+// Initialize queue with dynamic import for ESM compatibility
+async function initializeQueue() {
+  if (!queue) {
+    const PQueue = (await import('p-queue')).default;
+    queue = new PQueue({ 
+      concurrency: 2,  // Max 2 browser instances running simultaneously
+    });
+
+    // Add queue event logging for debugging
+    queue.on('add', () => {
+      logger.info(`Job added to queue. Size: ${queue.size}, Running: ${queue.pending}`);
+    });
+
+    queue.on('idle', () => {
+      logger.info('Queue is idle - all jobs completed');
+    });
+    
+    logger.info('Queue initialized successfully');
+  }
+  return queue;
+}
+
 // Validation schema for incoming payload
 const payloadSchema = Joi.object({
   header_headline: Joi.string().required(),
@@ -389,8 +414,12 @@ app.post('/create-landing', async (req, res) => {
 
     logger.info('Received valid payload for landing page creation');
     
-    // Create the landing page
-    const result = await createLandingPage(value);
+    // Initialize queue and queue the job with timeout protection
+    await initializeQueue();
+    const result = await queue.add(
+      async () => await createLandingPage(value),
+      { timeout: 300000 } // 5 minute timeout per job
+    );
     
     res.status(200).json({
       success: true,
@@ -410,9 +439,24 @@ app.post('/create-landing', async (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+  const queueStats = queue ? {
+    size: queue.size,           // Number of jobs waiting
+    pending: queue.pending,      // Number of jobs currently running
+    totalJobsProcessed: queue.size + queue.pending, // Quick stat
+    concurrency: queue.concurrency,
+    isPaused: queue.isPaused
+  } : {
+    status: 'not_initialized'
+  };
+
   res.status(200).json({
     status: 'healthy',
     version: '1.0.0',
+    queue: queueStats,
+    system: {
+      memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+      uptime: Math.round(process.uptime()) + ' seconds'
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -452,7 +496,12 @@ app.post('/test', async (req, res) => {
   };
 
   try {
-    const result = await createLandingPage(testData);
+    // Initialize queue and queue the test job with timeout protection
+    await initializeQueue();
+    const result = await queue.add(
+      async () => await createLandingPage(testData),
+      { timeout: 300000 } // 5 minute timeout per job
+    );
     res.status(200).json({
       success: true,
       message: 'Test page created and saved as draft successfully',
