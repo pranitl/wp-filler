@@ -33,7 +33,7 @@ async function initializeQueue() {
   if (!queue) {
     const PQueue = (await import('p-queue')).default;
     queue = new PQueue({ 
-      concurrency: 2,  // Max 2 browser instances running simultaneously
+      concurrency: 3,  // Max 3 browser instances running simultaneously
     });
 
     // Add queue event logging for debugging
@@ -417,8 +417,7 @@ app.post('/create-landing', async (req, res) => {
     // Initialize queue and queue the job with timeout protection
     await initializeQueue();
     const result = await queue.add(
-      async () => await createLandingPage(value),
-      { timeout: 300000 } // 5 minute timeout per job
+      async () => await createLandingPage(value)
     );
     
     res.status(200).json({
@@ -499,8 +498,7 @@ app.post('/test', async (req, res) => {
     // Initialize queue and queue the test job with timeout protection
     await initializeQueue();
     const result = await queue.add(
-      async () => await createLandingPage(testData),
-      { timeout: 300000 } // 5 minute timeout per job
+      async () => await createLandingPage(testData)
     );
     res.status(200).json({
       success: true,
