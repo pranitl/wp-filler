@@ -34,6 +34,506 @@ class WordPressFormFiller {
     return this.mapping;
   }
 
+  normalizeText(value) {
+    return (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
+  async openEditor(page, data) {
+    if (data.edit_url) {
+      logger.info(`Opening existing landing page editor: ${data.edit_url}`);
+      await page.goto(data.edit_url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 20000
+      });
+      await page.waitForTimeout(1500);
+      return;
+    }
+
+    await this.navigateToNewLandingPage(page);
+  }
+
+  async clickPanelByName(page, panelName) {
+    logger.info(`Opening panel: ${panelName}`);
+    const opened = await page.evaluate((name) => {
+      const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const links = Array.from(document.querySelectorAll('.acf-tab-wrap a, a.acf-tab-button, .acf-tab-wrap li a'));
+      const target = links.find((link) => normalize(link.textContent).includes(normalize(name)));
+      if (target) {
+        target.scrollIntoView({ behavior: 'instant', block: 'center' });
+        target.click();
+        return true;
+      }
+      return false;
+    }, panelName);
+
+    if (!opened) {
+      await page.click(`text="${panelName}"`);
+    }
+
+    await page.waitForTimeout(800);
+  }
+
+  async fillFieldByLabel(page, labelText, value) {
+    if (!value) return false;
+
+    return page.evaluate(({ labelText, value }) => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field'));
+      const field = fields.find((candidate) => {
+        const label = candidate.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent).includes(normalize(labelText));
+      });
+
+      if (!field) return false;
+
+      const input = field.querySelector('input[type="text"], input[type="url"], textarea');
+      if (!input) return false;
+
+      input.value = value;
+      ['input', 'change', 'blur'].forEach((eventName) => {
+        input.dispatchEvent(new Event(eventName, { bubbles: true }));
+      });
+
+      if (typeof jQuery !== 'undefined') {
+        jQuery(input).trigger('input').trigger('change').trigger('blur');
+      }
+
+      return true;
+    }, { labelText, value });
+  }
+
+  async fillRichTextFieldByLabel(page, labelText, html) {
+    if (!html) return false;
+
+    await page.evaluate((labelText) => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field'));
+      const field = fields.find((candidate) => {
+        const label = candidate.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent).includes(normalize(labelText));
+      });
+
+      if (!field) return false;
+
+      const initTrigger = Array.from(field.querySelectorAll('*')).find((node) =>
+        normalize(node.textContent).includes('click to initialize tinymce')
+      );
+
+      if (initTrigger && typeof initTrigger.click === 'function') {
+        initTrigger.click();
+        return true;
+      }
+
+      return false;
+    }, labelText);
+
+    await page.waitForTimeout(1200);
+
+    return page.evaluate(({ labelText, html }) => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field'));
+      const field = fields.find((candidate) => {
+        const label = candidate.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent).includes(normalize(labelText));
+      });
+
+      if (!field) return false;
+
+      const wrap = field.querySelector('[id$="-wrap"].wp-editor-wrap, .wp-editor-wrap');
+      const htmlTab = field.querySelector('.switch-html, [id$="-html"]');
+      if (wrap) {
+        wrap.classList.remove('tmce-active');
+        wrap.classList.add('html-active');
+      }
+      if (htmlTab && typeof htmlTab.click === 'function') {
+        htmlTab.click();
+      }
+
+      const textarea = field.querySelector('textarea');
+      if (textarea) {
+        textarea.value = html;
+        textarea.style.display = 'block';
+        textarea.removeAttribute('aria-hidden');
+        ['input', 'change', 'blur'].forEach((eventName) => {
+          textarea.dispatchEvent(new Event(eventName, { bubbles: true }));
+        });
+
+        if (typeof tinymce !== 'undefined' && textarea.id && tinymce.get(textarea.id)) {
+          const editor = tinymce.get(textarea.id);
+          if (editor) {
+            editor.setContent(html);
+            editor.save();
+          }
+        }
+
+        if (typeof jQuery !== 'undefined') {
+          jQuery(textarea).trigger('input').trigger('change').trigger('blur');
+        }
+      }
+
+      const editable = field.querySelector('[contenteditable="true"]');
+      if (editable) {
+        editable.innerHTML = html;
+        editable.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      const iframe = field.querySelector('iframe');
+      if (iframe && iframe.contentDocument?.body) {
+        iframe.contentDocument.body.innerHTML = html;
+      }
+
+      return true;
+    }, { labelText, html });
+  }
+
+  async clickVisibleSelectLink(page, index = 0) {
+    const clicked = await page.evaluate((targetIndex) => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
+      const servicesField = fields.find((field) => {
+        const label = field.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent) === 'services';
+      });
+      if (!servicesField) return false;
+
+      const links = Array.from(servicesField.querySelectorAll('a')).filter((link) => {
+        const text = normalize(link.textContent);
+        return text === 'select link';
+      });
+
+      const target = links[targetIndex];
+      if (!target) return false;
+
+      if (typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior: 'instant', block: 'center' });
+      }
+      target.click();
+      return true;
+    }, index);
+
+    if (!clicked) {
+      throw new Error(`Could not find visible Select Link button at index ${index}`);
+    }
+
+    await page.waitForTimeout(400);
+  }
+
+  async fillPantelopeServiceRow(page, index, service) {
+    return page.evaluate(({ index, service }) => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
+      const servicesField = fields.find((field) => {
+        const label = field.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent) === 'services';
+      });
+      if (!servicesField) return false;
+
+      const rows = Array.from(servicesField.querySelectorAll('tr.acf-row:not(.acf-clone)'))
+        .filter((row) => row.offsetParent !== null);
+      const row = rows[index];
+      if (!row) return false;
+
+      const titleInput = row.querySelector('input[type="text"]');
+      if (titleInput) {
+        titleInput.value = service.title || '';
+        ['input', 'change', 'blur'].forEach((eventName) => {
+          titleInput.dispatchEvent(new Event(eventName, { bubbles: true }));
+        });
+      }
+
+      const textarea = row.querySelector('textarea');
+      if (textarea) {
+        textarea.value = service.description || '';
+        ['input', 'change', 'blur'].forEach((eventName) => {
+          textarea.dispatchEvent(new Event(eventName, { bubbles: true }));
+        });
+
+        if (typeof tinymce !== 'undefined' && textarea.id && tinymce.get(textarea.id)) {
+          const editor = tinymce.get(textarea.id);
+          if (editor) {
+            editor.setContent(service.description || '');
+            editor.save();
+          }
+        }
+      }
+
+      if (typeof jQuery !== 'undefined') {
+        jQuery(row).find('input, textarea').trigger('input').trigger('change').trigger('blur');
+      }
+
+      return true;
+    }, { index, service });
+  }
+
+  async setLinkModal(page, url, text) {
+    await page.waitForSelector('#wp-link-url', { timeout: 5000 });
+    await page.fill('#wp-link-url', url);
+    await page.fill('#wp-link-text', text || 'Learn More');
+    await page.click('#wp-link-submit');
+    await page.waitForTimeout(600);
+  }
+
+  async setLinkFieldByLabel(page, labelText, url, text) {
+    if (!url) return false;
+
+    return page.evaluate(({ labelText, url, text }) => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field'));
+      const field = fields.find((candidate) => {
+        const label = candidate.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent).includes(normalize(labelText));
+      });
+
+      if (!field) return false;
+
+      const titleInput = field.querySelector('input.input-title');
+      const urlInput = field.querySelector('input.input-url');
+      const targetInput = field.querySelector('input.input-target');
+
+      if (titleInput) {
+        titleInput.value = text || 'Learn More';
+        ['input', 'change', 'blur'].forEach((eventName) => {
+          titleInput.dispatchEvent(new Event(eventName, { bubbles: true }));
+        });
+      }
+
+      if (urlInput) {
+        urlInput.value = url;
+        ['input', 'change', 'blur'].forEach((eventName) => {
+          urlInput.dispatchEvent(new Event(eventName, { bubbles: true }));
+        });
+      }
+
+      if (targetInput && !targetInput.value) {
+        targetInput.value = '';
+        targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      if (typeof jQuery !== 'undefined') {
+        jQuery(field).find('input').trigger('input').trigger('change').trigger('blur');
+      }
+
+      return Boolean(urlInput);
+    }, { labelText, url, text });
+  }
+
+  async setRepeaterCtaLink(page, index, url, text) {
+    if (!url) return;
+    const updated = await page.evaluate(({ targetIndex, url, text }) => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
+      const servicesField = fields.find((field) => {
+        const label = field.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent) === 'services';
+      });
+      if (!servicesField) return false;
+
+      const rows = Array.from(servicesField.querySelectorAll('tr.acf-row:not(.acf-clone)'))
+        .filter((row) => row.offsetParent !== null);
+      const row = rows[targetIndex];
+      if (!row) return false;
+
+      const titleInput = row.querySelector('input.input-title');
+      const urlInput = row.querySelector('input.input-url');
+      const targetInput = row.querySelector('input.input-target');
+
+      if (titleInput) {
+        titleInput.value = text || 'Learn More';
+        ['input', 'change', 'blur'].forEach((eventName) => {
+          titleInput.dispatchEvent(new Event(eventName, { bubbles: true }));
+        });
+      }
+
+      if (urlInput) {
+        urlInput.value = url;
+        ['input', 'change', 'blur'].forEach((eventName) => {
+          urlInput.dispatchEvent(new Event(eventName, { bubbles: true }));
+        });
+      }
+
+      if (targetInput && !targetInput.value) {
+        targetInput.value = '';
+        targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      if (typeof jQuery !== 'undefined') {
+        jQuery(row).find('input').trigger('input').trigger('change').trigger('blur');
+      }
+
+      return Boolean(urlInput);
+    }, { targetIndex: index, url, text });
+
+    if (!updated) {
+      await this.clickVisibleSelectLink(page, index);
+      await page.waitForTimeout(400);
+      await this.setLinkModal(page, url, text);
+    }
+  }
+
+  getPantelopeServices(data) {
+    if (Array.isArray(data.pantelope_services) && data.pantelope_services.length > 0) {
+      return data.pantelope_services;
+    }
+
+    return [
+      {
+        title: data.svc1_title || data.svc1_name,
+        description: data.svc1_description || '',
+        ctaText: data.svc1_cta_text || 'Learn More',
+        ctaUrl: data.svc1_cta_url || ''
+      },
+      {
+        title: data.svc2_title || data.svc2_name,
+        description: data.svc2_description || '',
+        ctaText: data.svc2_cta_text || 'Learn More',
+        ctaUrl: data.svc2_cta_url || ''
+      },
+      {
+        title: data.svc3_title || data.svc3_name,
+        description: data.svc3_description || '',
+        ctaText: data.svc3_cta_text || 'Learn More',
+        ctaUrl: data.svc3_cta_url || ''
+      },
+      {
+        title: data.svc4_title || data.svc4_name,
+        description: data.svc4_description || '',
+        ctaText: data.svc4_cta_text || 'Learn More',
+        ctaUrl: data.svc4_cta_url || ''
+      }
+    ].filter((service) => service.title);
+  }
+
+  async fillPantelopeHero(page, data) {
+    await this.clickPanelByName(page, 'Hero Area');
+
+    await this.fillFieldByLabel(page, 'Hero Headline', data.pantelope_hero_headline || data.hero_text_left);
+    await this.fillFieldByLabel(page, 'Hero Excerpt', data.hero_excerpt);
+    await this.fillFieldByLabel(page, 'Button 1 Text', data.hero_btn1_text);
+    await this.fillFieldByLabel(page, 'Button 1 URL', data.hero_btn1_url);
+  }
+
+  async fillPantelopeServices(page, data) {
+    await this.clickPanelByName(page, 'Services');
+    await this.fillFieldByLabel(page, 'Services Headline', data.pantelope_services_headline);
+
+    const services = this.getPantelopeServices(data);
+    if (services.length === 0) return;
+
+    let rowCount = await page.evaluate(() => {
+      const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
+      const servicesField = fields.find((field) => {
+        const label = field.querySelector('.acf-label label, .acf-label');
+        return label && normalize(label.textContent) === 'services';
+      });
+      if (!servicesField) return 0;
+
+      return Array.from(servicesField.querySelectorAll('tr.acf-row:not(.acf-clone)'))
+        .filter((row) => row.offsetParent !== null).length;
+    });
+    while (rowCount < services.length) {
+      const added = await page.evaluate(() => {
+        const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
+        const servicesField = fields.find((field) => {
+          const label = field.querySelector('.acf-label label, .acf-label');
+          return label && normalize(label.textContent) === 'services';
+        });
+        if (!servicesField) return false;
+
+        const target = Array.from(servicesField.querySelectorAll('a'))
+          .find((link) => normalize(link.textContent) === 'add a service');
+        if (!target) return false;
+        target.click();
+        return true;
+      });
+      if (!added) {
+        throw new Error('Could not trigger Add a Service button');
+      }
+      await page.waitForTimeout(500);
+      rowCount = await page.evaluate(() => {
+        const normalize = (input) => (input || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
+        const servicesField = fields.find((field) => {
+          const label = field.querySelector('.acf-label label, .acf-label');
+          return label && normalize(label.textContent) === 'services';
+        });
+        if (!servicesField) return 0;
+
+        return Array.from(servicesField.querySelectorAll('tr.acf-row:not(.acf-clone)'))
+          .filter((row) => row.offsetParent !== null).length;
+      });
+    }
+
+    for (let i = 0; i < services.length; i += 1) {
+      await this.fillPantelopeServiceRow(page, i, services[i]);
+    }
+
+    for (let i = 0; i < services.length; i += 1) {
+      await this.setRepeaterCtaLink(page, i, services[i].ctaUrl, services[i].ctaText || 'Learn More');
+    }
+  }
+
+  async fillPantelopeOwnerArea(page, data) {
+    await this.clickPanelByName(page, 'Owner Area');
+
+    await this.fillFieldByLabel(page, 'Area Headline', data.owner_area_headline);
+    await this.fillFieldByLabel(page, 'Phone Number Text', data.owner_area_phone_text);
+    await this.fillRichTextFieldByLabel(page, 'Area Content', data.owner_area_html);
+
+    if (data.owner_area_cta_url) {
+      const updated = await this.setLinkFieldByLabel(
+        page,
+        'CTA Button',
+        data.owner_area_cta_url,
+        data.owner_area_cta_text || 'Learn More'
+      );
+
+      if (!updated) {
+        await this.clickVisibleSelectLink(page, 0);
+        await this.setLinkModal(page, data.owner_area_cta_url, data.owner_area_cta_text || 'Learn More');
+      }
+    }
+  }
+
+  async savePage(page, options = {}) {
+    const existing = Boolean(options.existing);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+
+    const saveSelectors = existing
+      ? ['#publish', 'input#publish', 'button:has-text("Update")', 'input[value="Update"]']
+      : ['#save-post', 'input#save-post', 'button:has-text("Save Draft")', 'input[value="Save Draft"]'];
+
+    let saved = false;
+    for (const selector of saveSelectors) {
+      try {
+        await page.click(selector, { timeout: 3000 });
+        saved = true;
+        break;
+      } catch (error) {
+        // Try next selector
+      }
+    }
+
+    if (!saved) {
+      throw new Error(existing ? 'Could not find Update button' : 'Could not find Save Draft button');
+    }
+
+    await page.waitForTimeout(3000);
+
+    if (existing) {
+      return {
+        previewUrl: page.url()
+      };
+    }
+
+    return {
+      previewUrl: await this.getPreviewUrl(page)
+    };
+  }
+
   /**
    * Navigate to the new landing page editor
    */
@@ -128,20 +628,24 @@ class WordPressFormFiller {
     logger.info(`Selecting page design: ${design}`);
     await page.evaluate(() => window.scrollBy(0, 500));
     await page.waitForTimeout(1000);
-    
-    const mapping = await this.loadMapping();
-    const pageDesignField = mapping.fields.find(f => f.payloadKey === 'page_design');
-    if (pageDesignField) {
+
+    const selectors = [
+      `input[name="acf[field_62f9dkhrn3e92]"][value="${design}"]`,
+      `#acf-field_62f9dkhrn3e92-${design}`
+    ];
+
+    for (const selector of selectors) {
       try {
-        await page.waitForSelector(pageDesignField.selector, { timeout: 5000 });
-        await page.$eval(pageDesignField.selector, el => el.scrollIntoViewIfNeeded());
-        await page.waitForTimeout(500);
-        await page.click(pageDesignField.selector);
-        logger.info('Page Design radio button selected');
-      } catch (e) {
-        logger.warn('Could not select Page Design radio button');
+        await page.waitForSelector(selector, { timeout: 3000 });
+        await page.check(selector);
+        logger.info(`Page Design radio button selected: ${design}`);
+        return;
+      } catch (error) {
+        // Try next selector
       }
     }
+
+    logger.warn(`Could not select Page Design radio button for design "${design}"`);
   }
 
   /**
@@ -789,6 +1293,35 @@ class WordPressFormFiller {
     }
   }
 
+  async getPreviewUrl(page) {
+    try {
+      await page.waitForSelector('a:has-text("Preview post")', { timeout: 10000 });
+
+      const previewUrl = await page.evaluate(() => {
+        const previewLink = document.querySelector('a[target="_blank"]');
+        if (previewLink && previewLink.textContent.includes('Preview post')) {
+          return previewLink.href;
+        }
+        const links = document.querySelectorAll('a[href*="preview=true"]');
+        if (links.length > 0) {
+          return links[0].href;
+        }
+        return null;
+      });
+
+      if (previewUrl) {
+        logger.info(`Preview URL captured: ${previewUrl}`);
+        return previewUrl;
+      }
+
+      logger.warn('Could not capture preview URL');
+      return null;
+    } catch (error) {
+      logger.warn('Preview link not found within timeout');
+      return null;
+    }
+  }
+
   /**
    * Main form filling function that orchestrates all the steps
    */
@@ -796,25 +1329,45 @@ class WordPressFormFiller {
     try {
       logger.info('Starting complete form filling process');
       
-      // Navigate to new landing page
-      await this.navigateToNewLandingPage(page);
+      // Open the target editor
+      await this.openEditor(page, data);
       
       // Fill page title
       await this.fillPageTitle(page, data.header_headline);
       
       // Select page design
       await this.selectPageDesign(page, data.page_design);
-      
-      // Fill all panels
-      await this.fillHeroArea(page, data);
-      await this.fillIntroContent(page, data);
-      await this.fillCallToAction(page, data);
-      await this.fillBelowForm(page, data);
-      await this.fillServicesGrid(page, data);
-      await this.fillBottomCTA(page, data);
-      
-      // Save draft and get preview URL
-      const previewUrl = await this.saveDraftAndGetPreviewUrl(page);
+
+      let previewUrl;
+
+      if (data.page_design === 'e') {
+        // Existing pages need one save/reload cycle before Pantelope-specific
+        // fields render in the DOM.
+        if (data.edit_url) {
+          logger.info('Saving existing page after selecting Pantelope design to refresh ACF layout');
+          await this.savePage(page, { existing: true });
+          await page.goto(data.edit_url, {
+            waitUntil: 'domcontentloaded',
+            timeout: 20000
+          });
+          await page.waitForTimeout(1500);
+        }
+
+        await this.fillPantelopeHero(page, data);
+        await this.fillPantelopeServices(page, data);
+        await this.fillPantelopeOwnerArea(page, data);
+        ({ previewUrl } = await this.savePage(page, { existing: Boolean(data.edit_url) }));
+      } else {
+        // Fill all panels
+        await this.fillHeroArea(page, data);
+        await this.fillIntroContent(page, data);
+        await this.fillCallToAction(page, data);
+        await this.fillBelowForm(page, data);
+        await this.fillServicesGrid(page, data);
+        await this.fillBottomCTA(page, data);
+
+        ({ previewUrl } = await this.savePage(page, { existing: Boolean(data.edit_url) }));
+      }
       
       logger.info('Complete form filling process finished successfully');
       
