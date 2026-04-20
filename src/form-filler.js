@@ -38,6 +38,62 @@ class WordPressFormFiller {
     return (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
+  getSiteRootFromAdminUrl() {
+    return process.env.WP_ADMIN_URL.replace(/\/wp-admin(?:\/index\.php)?$/, '');
+  }
+
+  slugFromPayload(data) {
+    if (data.slug) return data.slug;
+    if (data.source_markdown) {
+      return path.basename(data.source_markdown, path.extname(data.source_markdown));
+    }
+    if (data.town) {
+      return this.normalizeText(data.town).replace(/\s+/g, '-');
+    }
+    return null;
+  }
+
+  publicLandingUrlFromPayload(data) {
+    const slug = this.slugFromPayload(data);
+    if (!slug) return null;
+    return `${this.getSiteRootFromAdminUrl()}/landing/${slug}/`;
+  }
+
+  async openEditorFromPublicPage(page, data) {
+    const publicUrl = this.publicLandingUrlFromPayload(data);
+    if (!publicUrl) {
+      throw new Error('Missing edit_url and could not infer landing-page slug from payload');
+    }
+
+    logger.info(`Opening public landing page for edit discovery: ${publicUrl}`);
+    await page.goto(publicUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+    await page.waitForTimeout(1500);
+
+    const adminEditSelectors = [
+      '#wp-admin-bar-edit a',
+      'a:has-text("Edit Landing Page")',
+      'a:has-text("Edit")'
+    ];
+
+    for (const selector of adminEditSelectors) {
+      const locator = page.locator(selector);
+      if (await locator.count()) {
+        await locator.first().click();
+        await page.waitForTimeout(1500);
+        return {
+          existing: true,
+          editUrl: page.url(),
+          publicUrl
+        };
+      }
+    }
+
+    throw new Error(`Could not open editor from public page: ${publicUrl}`);
+  }
+
   async openEditor(page, data) {
     if (data.edit_url) {
       logger.info(`Opening existing landing page editor: ${data.edit_url}`);
@@ -46,10 +102,32 @@ class WordPressFormFiller {
         timeout: 20000
       });
       await page.waitForTimeout(1500);
-      return;
+      return {
+        existing: true,
+        editUrl: page.url(),
+        publicUrl: this.publicLandingUrlFromPayload(data)
+      };
+    }
+
+    if (data.create_new) {
+      await this.navigateToNewLandingPage(page);
+      return {
+        existing: false,
+        editUrl: page.url(),
+        publicUrl: this.publicLandingUrlFromPayload(data)
+      };
+    }
+
+    if (data.page_design === 'e' && (data.source_markdown || data.slug || data.town)) {
+      return this.openEditorFromPublicPage(page, data);
     }
 
     await this.navigateToNewLandingPage(page);
+    return {
+      existing: false,
+      editUrl: page.url(),
+      publicUrl: this.publicLandingUrlFromPayload(data)
+    };
   }
 
   async clickPanelByName(page, panelName) {
@@ -522,15 +600,84 @@ class WordPressFormFiller {
     }
 
     await page.waitForTimeout(3000);
+    return {
+      editUrl: page.url(),
+      previewUrl: await this.getPreviewUrl(page),
+      publicUrl: await this.getPublicUrl(page)
+    };
+  }
 
-    if (existing) {
-      return {
-        previewUrl: page.url()
-      };
+  async getPublicUrl(page) {
+    try {
+      const publicUrl = await page.evaluate(() => {
+        const selectors = [
+          '#sample-permalink a',
+          '#view-post-btn a',
+          '#wp-admin-bar-view a',
+          'a[rel="permalink"]'
+        ];
+
+        for (const selector of selectors) {
+          const link = document.querySelector(selector);
+          const href = link?.href || link?.getAttribute?.('href');
+          if (href) return href;
+        }
+
+        const previewLikeLinks = Array.from(document.querySelectorAll('a[href*="preview=true"], a[href*="preview_id="]'));
+        const previewLink = previewLikeLinks.find((link) => link.href);
+        return previewLink ? previewLink.href : null;
+      });
+
+      if (!publicUrl) {
+        return null;
+      }
+
+      if (publicUrl.includes('preview=true') || publicUrl.includes('preview_id=')) {
+        return publicUrl.split('?')[0];
+      }
+
+      return publicUrl;
+    } catch (error) {
+      logger.warn('Could not capture public URL');
+      return null;
     }
+  }
+
+  async pantelopeLayoutVisible(page) {
+    try {
+      return page.evaluate(() => {
+        const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const visibleTabs = Array.from(document.querySelectorAll('.acf-tab-wrap a, a.acf-tab-button, .acf-tab-wrap li a'))
+          .filter((tab) => tab.offsetParent !== null)
+          .map((tab) => normalize(tab.textContent));
+
+        return (
+          visibleTabs.includes('hero area') &&
+          visibleTabs.includes('services') &&
+          visibleTabs.includes('owner area')
+        );
+      });
+    } catch (error) {
+      logger.warn('Could not determine whether Pantelope layout is visible');
+      return false;
+    }
+  }
+
+  async buildDryRunResult(page, data, editor, message, extras = {}) {
+    const publicUrl = await this.getPublicUrl(page).catch(() => null);
+    const previewUrl = extras.skipPreviewLookup
+      ? null
+      : await this.getPreviewUrl(page).catch(() => null);
 
     return {
-      previewUrl: await this.getPreviewUrl(page)
+      success: true,
+      dryRun: true,
+      savePerformed: false,
+      editUrl: editor.editUrl || page.url(),
+      publicUrl: publicUrl || editor.publicUrl || this.publicLandingUrlFromPayload(data),
+      previewUrl,
+      message,
+      ...extras
     };
   }
 
@@ -1330,7 +1477,7 @@ class WordPressFormFiller {
       logger.info('Starting complete form filling process');
       
       // Open the target editor
-      await this.openEditor(page, data);
+      const editor = await this.openEditor(page, data);
       
       // Fill page title
       await this.fillPageTitle(page, data.header_headline);
@@ -1338,25 +1485,81 @@ class WordPressFormFiller {
       // Select page design
       await this.selectPageDesign(page, data.page_design);
 
-      let previewUrl;
+      const dryRun = Boolean(data.dry_run);
+      let saveResult;
 
       if (data.page_design === 'e') {
-        // Existing pages need one save/reload cycle before Pantelope-specific
-        // fields render in the DOM.
-        if (data.edit_url) {
-          logger.info('Saving existing page after selecting Pantelope design to refresh ACF layout');
-          await this.savePage(page, { existing: true });
-          await page.goto(data.edit_url, {
+        if (!editor.existing) {
+          if (dryRun) {
+            return this.buildDryRunResult(
+              page,
+              data,
+              editor,
+              'Dry run reached the initial Pantelope draft setup step and stopped before creating a new draft.',
+              {
+                saveSkippedReason: 'Pantelope new-page flows require an initial draft save before the Pantelope field layout is fully available.',
+                skipPreviewLookup: true
+              }
+            );
+          }
+
+          logger.info('Saving initial Pantelope draft so option-e fields render for the new page');
+          const initialDraft = await this.savePage(page, { existing: false });
+          editor.editUrl = initialDraft.editUrl || page.url();
+          editor.publicUrl = initialDraft.publicUrl || editor.publicUrl;
+          editor.existing = true;
+
+          await page.goto(editor.editUrl, {
             waitUntil: 'domcontentloaded',
             timeout: 20000
           });
           await page.waitForTimeout(1500);
         }
 
+        // Existing pages need one save/reload cycle before Pantelope-specific
+        // fields render in the DOM.
+        if (editor.existing) {
+          const layoutVisible = await this.pantelopeLayoutVisible(page);
+          if (!layoutVisible) {
+            if (dryRun) {
+              return this.buildDryRunResult(
+                page,
+                data,
+                editor,
+                'Dry run stopped before the Pantelope layout refresh save that would be required to continue safely.',
+                {
+                  saveSkippedReason: 'Pantelope fields were not visible yet, and a save/reload would be required to render them.'
+                }
+              );
+            }
+
+            logger.info('Saving existing page after selecting Pantelope design to refresh ACF layout');
+            const refreshed = await this.savePage(page, { existing: true });
+            editor.editUrl = refreshed.editUrl || editor.editUrl || data.edit_url;
+            editor.publicUrl = refreshed.publicUrl || editor.publicUrl;
+
+            await page.goto(editor.editUrl || data.edit_url, {
+              waitUntil: 'domcontentloaded',
+              timeout: 20000
+            });
+            await page.waitForTimeout(1500);
+          }
+        }
+
         await this.fillPantelopeHero(page, data);
         await this.fillPantelopeServices(page, data);
         await this.fillPantelopeOwnerArea(page, data);
-        ({ previewUrl } = await this.savePage(page, { existing: Boolean(data.edit_url) }));
+
+        if (dryRun) {
+          return this.buildDryRunResult(
+            page,
+            data,
+            editor,
+            'Pantelope dry run completed successfully. No changes were saved.'
+          );
+        }
+
+        saveResult = await this.savePage(page, { existing: editor.existing });
       } else {
         // Fill all panels
         await this.fillHeroArea(page, data);
@@ -1366,14 +1569,27 @@ class WordPressFormFiller {
         await this.fillServicesGrid(page, data);
         await this.fillBottomCTA(page, data);
 
-        ({ previewUrl } = await this.savePage(page, { existing: Boolean(data.edit_url) }));
+        if (dryRun) {
+          return this.buildDryRunResult(
+            page,
+            data,
+            editor,
+            'Legacy dry run completed successfully. No changes were saved.'
+          );
+        }
+
+        saveResult = await this.savePage(page, { existing: editor.existing });
       }
       
       logger.info('Complete form filling process finished successfully');
       
       return {
         success: true,
-        previewUrl: previewUrl,
+        dryRun: false,
+        savePerformed: true,
+        editUrl: saveResult.editUrl || editor.editUrl || page.url(),
+        publicUrl: saveResult.publicUrl || editor.publicUrl || this.publicLandingUrlFromPayload(data),
+        previewUrl: saveResult.previewUrl,
         message: 'Landing page created and saved as draft successfully'
       };
       

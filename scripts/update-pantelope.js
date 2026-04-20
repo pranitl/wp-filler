@@ -255,7 +255,9 @@ async function fillServices(page, payload) {
     const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
     const servicesField = fields.find((field) => {
       const label = field.querySelector('.acf-label');
-      return label && normalizeInner(label.textContent) === 'services';
+      return label &&
+        normalizeInner(label.textContent) === 'services' &&
+        field.querySelector('table.acf-table, .acf-repeater');
     });
     return Boolean(servicesField && servicesField.querySelector('table.acf-table, .acf-repeater'));
   }, {}, { timeout: 5000 }).catch(() => null);
@@ -271,7 +273,9 @@ async function fillServices(page, payload) {
     const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
     const servicesField = fields.find((field) => {
       const label = field.querySelector('.acf-label');
-      return label && normalizeInner(label.textContent) === 'services';
+      return label &&
+        normalizeInner(label.textContent) === 'services' &&
+        field.querySelector('table.acf-table, .acf-repeater');
     });
     if (!servicesField) throw new Error('Services field not found');
 
@@ -292,7 +296,9 @@ async function fillServices(page, payload) {
     const fields = Array.from(document.querySelectorAll('.acf-field')).filter((field) => field.offsetParent !== null);
     const servicesField = fields.find((field) => {
       const label = field.querySelector('.acf-label');
-      return label && normalizeInner(label.textContent) === 'services';
+      return label &&
+        normalizeInner(label.textContent) === 'services' &&
+        field.querySelector('table.acf-table, .acf-repeater');
     });
     if (!servicesField) throw new Error('Services field not found');
 

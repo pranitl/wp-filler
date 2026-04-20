@@ -15,6 +15,8 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./config:/app/config:ro
+      - ./docker-volumes/wp-filler:/home/pptruser/.wp-filler
+      - ./docker-volumes/wp-session:/app/.wp-session
     restart: unless-stopped
     networks:
       - shared-network
@@ -41,9 +43,11 @@ services:
       - ./logs:/app/logs
       - ./config:/app/config:ro
       - ./src:/app/src:ro
+      - ./docker-volumes/wp-filler:/home/pptruser/.wp-filler
+      - ./docker-volumes/wp-session:/app/.wp-session
     restart: unless-stopped
     networks:
-      - wp-filler-network
+      - shared-network
     profiles:
       - dev
 

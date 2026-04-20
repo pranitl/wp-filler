@@ -1,0 +1,23 @@
+services:
+  wp-filler-headed:
+    build:
+      context: .
+      dockerfile: Dockerfile.headed
+    container_name: wp-filler-headed
+    ports:
+      - "3002:3000"
+      - "5901:5900"
+      - "7901:7900"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - HEADLESS=false
+      - DEBUG_MODE=true
+      - DISPLAY=:99
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+      - ./docker-volumes/wp-filler:/home/pptruser/.wp-filler
+      - ./docker-volumes/wp-session:/app/.wp-session
+    restart: unless-stopped

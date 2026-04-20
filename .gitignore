@@ -37,6 +37,7 @@ temp/
 
 # Docker volumes (local development)
 docker-volumes/
+.wp-session/
 
 # Test coverage
 coverage/
@@ -61,3 +62,6 @@ desktop.ini
 
 # Optional REPL history
 .node_repl_history
+
+# Planning docs
+*.html

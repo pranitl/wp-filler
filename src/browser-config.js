@@ -1,15 +1,27 @@
 // Browser configuration to avoid detection
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 
-// Get a persistent user data directory
-const getUserDataDir = () => {
+// Root directory for durable browser/session state
+const getStateRootDir = () => {
   const homeDir = os.homedir();
-  return path.join(homeDir, '.wp-filler', 'browser-data');
+  return path.join(homeDir, '.wp-filler');
+};
+
+// Get a persistent browser data directory
+const getUserDataDir = () => {
+  return path.join(getStateRootDir(), 'browser-data');
 };
 
 // Browser configuration that mimics a real browser
 const getBrowserConfig = () => {
+  const chromeCandidates = [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    path.join(os.homedir(), 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome')
+  ];
+  const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
+
   return {
     headless: process.env.HEADLESS === 'true',
     
@@ -42,7 +54,8 @@ const getBrowserConfig = () => {
     ],
     
     // Slow down actions to appear more human
-    slowMo: parseInt(process.env.SLOW_MO) || 100
+    slowMo: parseInt(process.env.SLOW_MO) || 100,
+    executablePath
   };
 };
 
@@ -294,5 +307,6 @@ module.exports = {
   applyStealthMode,
   saveState,
   loadState,
+  getStateRootDir,
   getUserDataDir
 };
