@@ -6,8 +6,6 @@ services:
     container_name: wp-filler-headed
     ports:
       - "3002:3000"
-      - "5901:5900"
-      - "7901:7900"
     env_file:
       - .env
     environment:

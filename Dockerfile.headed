@@ -38,10 +38,6 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     xdg-utils \
     xvfb \
-    x11vnc \
-    fluxbox \
-    novnc \
-    websockify \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -64,9 +60,6 @@ USER pptruser
 RUN npx playwright install chromium
 
 EXPOSE 3000
-EXPOSE 5900
-EXPOSE 7900
-
 ENV DISPLAY=:99
 ENV HEADLESS=false
 
